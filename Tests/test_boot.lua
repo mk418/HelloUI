@@ -409,6 +409,14 @@ _G.C_EditMode = {
 -- combined list as presets-then-saved and indexes THAT with activeLayout, so
 -- the lookup has to do the same - otherwise this stub cannot catch the very
 -- off-by-number-of-presets bug it exists for.
+-- Lets a test put the player on somebody else's layout and back, so "we still
+-- ask when the layout is not active" can be checked rather than assumed.
+_G._setActiveLayoutIndex = function(i)
+    local was = activeIndex
+    activeIndex = i
+    return was
+end
+
 _G._activeLayoutName = function()
     local combined = {}
     for _, l in ipairs(_G.EditModePresetLayoutManager.GetCopyOfPresetLayouts()) do
@@ -887,9 +895,29 @@ eq(_G._activeLayoutName(), "HelloUI", "the ACTIVE layout is ours, not a preset")
 ok((_G._editModeKicked or 0) > 0, "Edit Mode was nudged into applying it")
 
 -- Once it is the active layout the question is retired for good.
+--
+-- IsActive asserted directly, because everything below depends on it and it is
+-- the thing that was wrong: it indexed the saved-only list from GetLayouts while
+-- activeLayout counts the presets first, so it compared 1 against 3, answered
+-- "not active", and the prompt came back every login on an install already using
+-- the layout.
+ok(ns.Layout:IsActive(), "the layout reports itself active once it is")
+
+-- And the latch is cleared first, or this passes without MaybeAsk ever reaching
+-- IsActive - which is exactly how the broken version got through.
 _G._shownPopup = nil
+ns.Layout.askedThisSession = false
 ns.Layout.MaybeAsk(ns.Layout)
-eq(_G._shownPopup, nil, "no prompt once the layout is already active")
+eq(_G._shownPopup, nil, "no prompt at the next login once the layout is active")
+
+-- The other half: a player who is NOT on our layout still gets asked.
+local wasActive = _G._setActiveLayoutIndex and _G._setActiveLayoutIndex(1)
+ns.Layout.askedThisSession = false
+ns.Layout.MaybeAsk(ns.Layout)
+eq(_G._shownPopup, "HELLOUI_USE_LAYOUT", "and is still asked when on someone else's layout")
+if wasActive then _G._setActiveLayoutIndex(wasActive) end
+_G._shownPopup = nil
+ns.Layout.askedThisSession = true
 
 do
     local sys, bars, moved = _G._savedLayouts()[1].systems, 0, 0

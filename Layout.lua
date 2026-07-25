@@ -293,6 +293,21 @@ local function presetLayouts()
     return presets
 end
 
+-- [presets..., saved...], the only list in which an Edit Mode index means
+-- anything. GetLayouts returns the saved layouts alone while activeLayout - and
+-- every index SaveLayouts cares about - counts the presets first. Shared by
+-- Apply and IsActive because doing it in one and not the other is precisely the
+-- bug that made the login prompt appear every session on an install already
+-- using the layout: a saved-only index of 1 compared against an activeLayout of
+-- 3 is never equal, so "is it active" always answered no.
+local function combinedLayouts(info)
+    local out = {}
+    local presets = presetLayouts()
+    for _, l in ipairs(presets) do out[#out + 1] = l end
+    for _, l in ipairs((info and info.layouts) or {}) do out[#out + 1] = l end
+    return out, #presets
+end
+
 local function presetSystems()
     local mgr = _G["EditModePresetLayoutManager"]
     if not (mgr and mgr.GetCopyOfPresetLayouts) then return nil end
@@ -467,12 +482,7 @@ function Layout:Apply(silent)
     -- because of the no-libraries rule - about forty lines, and the credit
     -- belongs here.
     --------------------------------------------------------------------
-    local presets = presetLayouts()
-    local numPresets = #presets
-
-    local combined = {}
-    for _, l in ipairs(presets) do combined[#combined + 1] = l end
-    for _, l in ipairs(info.layouts) do combined[#combined + 1] = l end
+    local combined, numPresets = combinedLayouts(info)
     info.layouts = combined
 
     local name = layoutName()
@@ -607,7 +617,11 @@ function Layout:IsActive()
     if not (C_EditMode and C_EditMode.GetLayouts) then return false end
     local ok, info = pcall(C_EditMode.GetLayouts)
     if not ok or type(info) ~= "table" then return false end
-    local index = layoutIndexByName(info, layoutName())
+
+    -- Against the COMBINED list, not the saved-only one GetLayouts hands back.
+    -- activeLayout counts the presets first, so comparing it to an index into
+    -- the saved list asks "is our layout active" and reliably answers no.
+    local index = layoutIndexByName({ layouts = combinedLayouts(info) }, layoutName())
     return index ~= nil and info.activeLayout == index
 end
 
@@ -633,15 +647,19 @@ StaticPopupDialogs["HELLOUI_USE_LAYOUT"] = {
     preferredIndex = 3,
 }
 
-local askedThisSession = false
+-- On the module rather than a file-local, so the harness can simulate the next
+-- login. It matters that it can: with the latch stuck true, "no prompt once the
+-- layout is active" passes without MaybeAsk ever reaching IsActive - which is
+-- how a broken IsActive shipped and asked every single login.
+Layout.askedThisSession = false
 
 function Layout:MaybeAsk()
-    if askedThisSession then return end
+    if Layout.askedThisSession then return end
     if not Config:Enabled("askLayout") then return end
     if not (C_EditMode and C_EditMode.GetLayouts) then return end
     if Layout:IsActive() then return end
 
-    askedThisSession = true
+    Layout.askedThisSession = true
     if StaticPopup_Show then StaticPopup_Show("HELLOUI_USE_LAYOUT") end
 end
 

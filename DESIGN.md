@@ -588,7 +588,12 @@ source and an assumption disagreed, the source won.
   first. So the list must be rebuilt as `[presets..., saved...]` before any
   index means anything, and that combined list is what `SaveLayouts` wants
   back. Getting this wrong silently activates a Blizzard preset instead of your
-  layout. Saving also does not *apply*: opening and immediately closing
+  layout — and it bites twice. The second time was `Layout:IsActive`, which
+  compared a saved-only index against `activeLayout`, answered "not active" for
+  a layout that plainly was, and re-asked the login question every single
+  session. Both callers share one `combinedLayouts` helper now, because having
+  the rebuild in one and not the other is the whole failure mode.
+  Saving also does not *apply*: opening and immediately closing
   `EditModeManagerFrame` is what makes Edit Mode re-read. This sequence is
   lifted from LibEditModeOverride (plusmouse, MIT), the known-working
   implementation, reimplemented rather than vendored under the no-libraries
