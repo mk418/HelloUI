@@ -83,6 +83,11 @@ local accountDefaults = {
     -- and Edit Mode owns its anchor AND its width and height. Same reasoning
     -- as the minimap: that is Edit Mode's job now.
 
+    -- Layout.lua. Builds the DragonflightUI bar arrangement as a real Edit
+    -- Mode layout, once, on first login. Off means HelloUI never touches Edit
+    -- Mode at all; `/hui layout` still applies it on demand.
+    applyLayoutOnce = true,
+
     -- Friends.lua.
     friendsClassColor = true,
     friendsHeart = true,

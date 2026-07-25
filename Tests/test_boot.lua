@@ -252,6 +252,67 @@ _G.BNGetGameAccountInfo = function() return nil end
 _G.FriendsFrame_UpdateFriendButton = function() end
 
 _G.UnitFrameHealthBar_Update = function() end
+_G.CopyTable = function(t)
+    if type(t) ~= "table" then return t end
+    local out = {}
+    for k, v in pairs(t) do out[k] = _G.CopyTable(v) end
+    return out
+end
+
+----------------------------------------------------------------------
+-- Edit Mode
+--
+-- Modelled on the real shapes: settings is an ARRAY of {setting,value}
+-- pairs (not a map), anchorInfo.relativeTo is a frame NAME string, and the
+-- preset manager hands back layouts already in that form.
+----------------------------------------------------------------------
+
+_G.Enum = _G.Enum or {}
+_G.Enum.EditModeSystem = { ActionBar = 1, UnitFrame = 2, Minimap = 3, StatusTrackingBar = 4 }
+_G.Enum.EditModeActionBarSystemIndices = {
+    MainBar = 1, Bar2 = 2, Bar3 = 3, RightBar1 = 4, RightBar2 = 5,
+    ExtraBar1 = 6, ExtraBar2 = 7, ExtraBar3 = 8,
+    StanceBar = 11, PetActionBar = 12, PossessActionBar = 13,
+}
+_G.Enum.EditModeActionBarSetting = {
+    Orientation = 0, NumRows = 1, NumIcons = 2, IconSize = 3, IconPadding = 4,
+    VisibleSetting = 5, HideBarArt = 6, HideBarScrolling = 8, AlwaysShowButtons = 9,
+}
+_G.Enum.EditModeLayoutType = { Preset = 0, Account = 1, Character = 2 }
+_G.Enum.EditModePresetLayouts = { Modern = 1, Classic = 2 }
+
+local function presetSystem(index)
+    return {
+        system = 1, systemIndex = index,
+        anchorInfo = { point = "BOTTOM", relativeTo = "UIParent", relativePoint = "BOTTOM", offsetX = 0, offsetY = 0 },
+        settings = { { setting = 1, value = 1 }, { setting = 3, value = 5 }, { setting = 4, value = 6 } },
+        isInDefaultPosition = true,
+    }
+end
+
+_G.EditModePresetLayoutManager = {
+    GetCopyOfPresetLayouts = function()
+        local systems = {}
+        for _, idx in ipairs({ 1, 2, 3, 4, 5, 6, 7, 8, 11, 12, 13 }) do
+            table.insert(systems, presetSystem(idx))
+        end
+        -- A non-action-bar system, to prove it survives untouched.
+        table.insert(systems, { system = 3, systemIndex = nil,
+            anchorInfo = { point = "TOPRIGHT", relativeTo = "UIParent", relativePoint = "TOPRIGHT", offsetX = 0, offsetY = 0 },
+            settings = {}, isInDefaultPosition = true })
+        return { { layoutIndex = 2, layoutName = "Classic", layoutType = 0, systems = systems } }
+    end,
+}
+
+local editModeLayouts = { layouts = {}, activeLayout = 1 }
+_G.C_EditMode = {
+    GetLayouts = function() return _G.CopyTable(editModeLayouts) end,
+    SaveLayouts = function(info) editModeLayouts = _G.CopyTable(info) end,
+    IsValidLayoutName = function() return true end,
+    OnLayoutAdded = function(i, activate) if activate then editModeLayouts.activeLayout = i end end,
+    SetActiveLayout = function(i) editModeLayouts.activeLayout = i end,
+}
+_G._editModeLayouts = function() return editModeLayouts end
 _G.ToggleMinimap = function()
     -- Real behaviour: hides the map and the dial, then shows both again.
     if _G.GameTimeFrame then _G.GameTimeFrame:Show() end
@@ -369,7 +430,8 @@ end
 local ns = {}
 local FILES = {
     "Core.lua", "Config.lua", "Buttons.lua", "Bars.lua", "StatusBars.lua",
-    "Player.lua", "Darkmode.lua", "Minimap.lua", "Friends.lua", "Options.lua",
+    "Player.lua", "Darkmode.lua", "Minimap.lua", "Friends.lua", "Layout.lua",
+    "Options.lua",
 }
 
 print("HelloUI boot harness")
@@ -474,6 +536,56 @@ print("\nminimap")
 eq(_G.GameTimeFrame:IsShown(), false, "time-of-day dial hidden")
 _G.ToggleMinimap()
 eq(_G.GameTimeFrame:IsShown(), false, "still hidden after ToggleMinimap re-shows it")
+
+print("\nlayout")
+local layouts = _G._editModeLayouts()
+eq(#layouts.layouts, 1, "one layout created")
+eq(layouts.layouts[1].layoutName, "HelloUI", "named HelloUI")
+eq(layouts.activeLayout, 1, "and switched to")
+eq(HelloUIDB.layoutAppliedV1, true, "one-time latch set")
+do
+    local sys, bars, moved = layouts.layouts[1].systems, 0, 0
+    local mainBar, minimapSystem
+    for _, e in ipairs(sys) do
+        if e.system == 1 then
+            bars = bars + 1
+            if not e.isInDefaultPosition then moved = moved + 1 end
+            if e.systemIndex == 1 then mainBar = e end
+        elseif e.system == 3 then
+            minimapSystem = e
+        end
+    end
+    eq(bars, 11, "every action bar system carried over from the preset")
+    eq(moved, 7, "the seven bars we position are flagged as moved")
+    ok(minimapSystem ~= nil and minimapSystem.isInDefaultPosition == true,
+        "systems we do not touch are left exactly as Blizzard had them")
+
+    -- settings is an array of pairs; a map write would silently do nothing
+    -- Read defensively: writing settings as a map instead of this array of
+    -- pairs is a real failure mode, and it should surface as a FAIL rather
+    -- than crashing the harness on a number where a table was expected.
+    local size, pad, rows
+    local wellFormed = true
+    for _, st in ipairs(mainBar.settings) do
+        if type(st) ~= "table" or st.setting == nil then
+            wellFormed = false
+        else
+            if st.setting == 3 then size = st.value end
+            if st.setting == 4 then pad = st.value end
+            if st.setting == 1 then rows = st.value end
+        end
+    end
+    ok(wellFormed, "settings stayed an array of {setting,value} pairs")
+    eq(size, 3, "icon size raw 3 (= 80%)")
+    eq(pad, 0, "icon padding raw 0 (= 2px)")
+    eq(rows, 1, "main bar is one row")
+    eq(mainBar.anchorInfo.relativeTo, "UIParent", "main bar pinned to UIParent")
+    eq(mainBar.anchorInfo.offsetY, 30, "main bar sits above the status bars")
+end
+
+-- Applying twice must not create a second layout.
+ns.Layout:Apply(true)
+eq(#_G._editModeLayouts().layouts, 1, "re-applying refreshes rather than duplicating")
 
 print("\nbar art")
 eq(mainMenuBar:IsShown(), false, "main bar backdrop hidden")

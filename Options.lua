@@ -262,8 +262,26 @@ clearCharBtn:SetScript("OnClick", function()
     Options:Refresh()
 end)
 
+-- Applying the layout is an action, not a setting: it writes an Edit Mode
+-- layout once and then HelloUI is not involved. A checkbox would imply
+-- HelloUI keeps enforcing it, which is exactly what it does not do.
+local layoutBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+layoutBtn:SetSize(220, 22)
+layoutBtn:SetPoint("TOPLEFT", resetBtn, "BOTTOMLEFT", 0, -8)
+layoutBtn:SetText("Apply the Dragonflight bar layout")
+layoutBtn:SetScript("OnClick", function() ns.Layout:Apply() end)
+layoutBtn:SetScript("OnEnter", function(self)
+    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+    GameTooltip:AddLine("Apply the Dragonflight bar layout", 1, 1, 1)
+    GameTooltip:AddLine("Creates an Edit Mode layout named HelloUI and switches " ..
+        "to it: bars stacked and centred, 80% icons, 2px padding. Your own " ..
+        "layouts are untouched - switch back in Edit Mode any time.", nil, nil, nil, true)
+    GameTooltip:Show()
+end)
+layoutBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
 local status = panel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
-status:SetPoint("TOPLEFT", resetBtn, "BOTTOMLEFT", 0, -14)
+status:SetPoint("TOPLEFT", layoutBtn, "BOTTOMLEFT", 0, -14)
 status:SetWidth(560)
 status:SetJustifyH("LEFT")
 status:SetSpacing(2)

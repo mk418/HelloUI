@@ -207,6 +207,7 @@ ns.MODULES = {
     "Darkmode",
     "Minimap",
     "Friends",
+    "Layout",
 }
 
 function ns:InitModules()
@@ -301,10 +302,17 @@ SlashCmdList["HELLOUI"] = function(msg)
         ns:Print("account settings reset to defaults")
     elseif cmd == "char" then
         ns.Config:CharCommand(rest)
+    elseif cmd == "layout" then
+        if rest == "status" then
+            ns.Layout:Status()
+        else
+            ns.Layout:Apply()
+        end
     else
-        ns:Print("usage: /hui |cff808080[config | on | off | apply | status | reset | char]|r")
+        ns:Print("usage: /hui |cff808080[config | on | off | apply | status | reset | char | layout]|r")
         ns:Print("  |cff808080char clear|r         - drop this character's overrides")
         ns:Print("  |cff808080char barsoff <id>|r  - hide bars on this character only")
+        ns:Print("  |cff808080layout|r            - build the Dragonflight bar layout in Edit Mode")
     end
 end
 

@@ -70,10 +70,13 @@ ships in the client.
 
 ## Current scope
 
-Nine features, each independently toggleable. Two changes from the first
+Ten features, each independently toggleable. Three changes from the first
 count: pinning the chat frame turned out to belong to Edit Mode, for the same
-reason the minimap tuck did (see *Out of scope*), and hiding the main bar art
-turned out to be real work rather than the no-op it first looked like.
+reason the minimap tuck did (see *Out of scope*); hiding the main bar art
+turned out to be real work rather than the no-op it first looked like; and the
+bar *arrangement* turned out to matter as much as the de-clutter, which the
+saved-profile method could never have revealed — AceDB records deviations, and
+DragonflightUI's layout was its default.
 
 - **Button text stripping** — keybind text and macro name to alpha 0 across
   bars 1–8, the stance bar and the pet bar. The single most-set value in the old
@@ -129,6 +132,21 @@ turned out to be real work rather than the no-op it first looked like.
   no click action at all. No positioning ships — see *Out of scope*.
 - **Friends list class colour** — plus the heart icon for friends whose note
   contains `<3`, ported as-is because it's twenty lines and it's charming.
+- **The bar layout** — reproduces DragonflightUI's default arrangement: bars
+  stacked and centred upward from the status bars, the two 3-row blocks
+  flanking them at ±64, 80% icons, 2px padding.
+
+  This is not a contradiction of "delegate position to Edit Mode" — it is that
+  rule taken seriously. Instead of fighting Edit Mode with `SetPoint` on frames
+  it will silently re-anchor, HelloUI writes a real Edit Mode layout named
+  `HelloUI` and lets Edit Mode apply it. Afterwards the addon is not involved:
+  it is the player's layout, editable and persistent like any other. Existing
+  layouts are never modified, so switching back is one dropdown.
+
+  Applied **once**, latched on `layoutAppliedV1`, the same one-time-migration
+  idiom the era-1159 fork used for its minimap tuck. Re-applying every login
+  would undo any bar the player had since dragged, which is the "addon owns
+  your layout" behaviour the whole design is written against.
 - **Options panel** — canvas panel, same shape as the other Hello addons.
 
 ## Out of scope
@@ -201,6 +219,7 @@ HelloUI/
 ├── Darkmode.lua    -- desaturate + tint over an explicit allowlist
 ├── Minimap.lua     -- time-of-day dial
 ├── Friends.lua     -- friends-list class colour, <3 heart
+├── Layout.lua      -- the DragonflightUI bar arrangement, as an Edit Mode layout
 ├── Options.lua     -- canvas options panel
 └── Tests/
     └── test_boot.lua  -- offline harness: stubs the API, loads all eleven
@@ -374,6 +393,16 @@ source and an assumption disagreed, the source won.
   preset layouts set `WidthHundreds`/`WidthTensAndOnes` and the matching height
   keys, so Edit Mode owns its size as well as its anchor. Easy to miss because
   the frame is not obviously "a UI system" the way the minimap is.
+- **Writing an Edit Mode layout.** `C_EditMode.GetLayouts` / `SaveLayouts` /
+  `OnLayoutAdded` / `SetActiveLayout` all exist on Era. Two shape traps:
+  `settings` is an **array of `{setting, value}` pairs**, not the map form the
+  preset files use, and `anchorInfo.relativeTo` is a frame **name string**.
+  Base the systems array on `EditModePresetLayoutManager:GetCopyOfPresetLayouts()`
+  rather than hand-building it, so every system you don't care about carries
+  Blizzard's own correct entry. Set `isInDefaultPosition = false` on anything
+  you move, or Edit Mode treats the system as untouched and re-slams it to the
+  preset anchor. Icon size and padding are stored pre-conversion:
+  `display = raw * stepSize + minValue`, so 80% is raw 3 and 2px padding raw 0.
 - **`MinimapCluster` is an Edit Mode system.** `EditModeSystemMixin:OnSystemLoad`
   replaces `SetPoint`, `ClearAllPoints`, `SetScale`, `SetShown` and `Hide` with
   overrides, the frame is `clampedToScreen`, and `ApplySystemAnchor` reverts

@@ -32,6 +32,10 @@ text permanently readable. See `DESIGN.md` for the evidence and the reasoning.
   it has no click action at all).
 - **Class-colours the friends list**, and shows a heart next to friends whose
   note contains `<3`.
+- **Builds DragonflightUI's bar layout** as a real Edit Mode layout named
+  `HelloUI` — bars stacked and centred, 80% icons, 2px padding — and switches to
+  it once, on first login. Your own layouts are never touched; switch back in
+  Edit Mode any time, or re-apply with `/hui layout`.
 
 Defaults reproduce the layout that was already in use, so a fresh install should
 look like the thing it replaced rather than a blank slate.
@@ -63,6 +67,8 @@ chat frame's width and height. Drag and resize them there.
 /hui char clear       drop them
 /hui char barsoff bar1 stance
                       toggle bars off for THIS character only
+/hui layout           (re)build the Dragonflight bar layout in Edit Mode
+/hui layout status    is it there, is it active
 ```
 
 ## Per-character overrides

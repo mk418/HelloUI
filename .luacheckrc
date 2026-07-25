@@ -28,6 +28,10 @@ globals = {
 read_globals = {
     -- Core widget and event API
     "CreateFrame",
+    "CopyTable",
+    "C_EditMode",
+    "EditModePresetLayoutManager",
+    "Enum",
     "hooksecurefunc",
     "InCombatLockdown",
     "DEFAULT_CHAT_FRAME",
