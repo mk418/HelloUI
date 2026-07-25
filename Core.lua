@@ -324,6 +324,8 @@ SlashCmdList["HELLOUI"] = function(msg)
     elseif cmd == "layout" then
         if rest == "status" then
             ns.Layout:Status()
+        elseif rest == "probe" then
+            ns.Layout:Probe()
         elseif rest == "char" then
             ns.Config:SetChar("layoutPerCharacter", true)
             ns:Print("layout: this character now gets its own layout")
@@ -343,6 +345,7 @@ SlashCmdList["HELLOUI"] = function(msg)
         ns:Print("  |cff808080char barsoff <id>|r  - hide bars on this character only")
         ns:Print("  |cff808080layout|r            - build/reset the Dragonflight bar layout")
         ns:Print("  |cff808080layout char|r       - give this character its own layout")
+        ns:Print("  |cff808080layout probe|r      - print where the bars actually are")
     end
 end
 

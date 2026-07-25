@@ -293,6 +293,12 @@ function Layout:Build()
                 setSetting(entry, S.NumRows, def.rows)
                 setSetting(entry, S.IconSize, ICON_SIZE)
                 setSetting(entry, S.IconPadding, ICON_PADDING)
+                -- Blizzard's preset has AlwaysShowButtons off, which hides
+                -- empty slots - so a mostly-empty bar renders as one or two
+                -- stray buttons rather than the 4x3 block the arrangement
+                -- assumes, and the flanks look broken rather than empty.
+                -- DragonflightUI's own default is alwaysShow = true.
+                setSetting(entry, S.AlwaysShowButtons, 1)
             end
             touched = touched + 1
         end
@@ -538,6 +544,43 @@ function Layout:MaybeAsk()
 
     askedThisSession = true
     if StaticPopup_Show then StaticPopup_Show("HELLOUI_USE_LAYOUT") end
+end
+
+--------------------------------------------------------------------------
+-- Measuring, instead of guessing
+--
+-- Everything above is written blind: the offline harness can prove the layout
+-- table is correct but has nothing to say about where a frame lands on a real
+-- screen, and reading pixel positions off a screenshot is guesswork. This
+-- prints what the frames actually report.
+--------------------------------------------------------------------------
+
+local PROBE = {
+    { "MainActionBar", "bar1" }, { "MultiBarBottomLeft", "bar2" },
+    { "MultiBarBottomRight", "bar3" }, { "MultiBarRight", "bar4" },
+    { "MultiBarLeft", "bar5" }, { "StanceBar", "stance" },
+    { "PetActionBar", "pet" }, { "MainStatusTrackingBarContainer", "statusbars" },
+    { "StatusTrackingBarManager", "statusmgr" }, { "MicroMenuContainer", "micromenu" },
+    { "BagsBar", "bags" },
+}
+
+function Layout:Probe()
+    local w = UIParent and UIParent:GetWidth() or 0
+    local h = UIParent and UIParent:GetHeight() or 0
+    ns:Print("screen %dx%d |cff808080(left, bottom, width, height - rounded)|r", w, h)
+
+    for _, def in ipairs(PROBE) do
+        local f = _G[def[1]]
+        if not f then
+            ns:Print("  %-10s |cff808080absent|r", def[2])
+        elseif not f.GetLeft or not f:GetLeft() then
+            ns:Print("  %-10s |cff808080unpositioned, shown=%s|r", def[2], tostring(f.IsShown and f:IsShown()))
+        else
+            ns:Print("  %-10s %d, %d  %dx%d  shown=%s", def[2],
+                f:GetLeft(), f:GetBottom(), f:GetWidth(), f:GetHeight(),
+                tostring(f:IsShown()))
+        end
+    end
 end
 
 function Layout:StatusText()

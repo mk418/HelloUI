@@ -29,6 +29,7 @@ globals = {
 read_globals = {
     -- Core widget and event API
     "CreateFrame",
+    "UIParent",
     "CopyTable",
     "C_EditMode",
     "EditModePresetLayoutManager",
