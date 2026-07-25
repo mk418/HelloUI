@@ -199,9 +199,86 @@ local function setProxy(def, wantOff)
     end
 end
 
+--------------------------------------------------------------------------
+-- Main bar art: the gryphons and the backdrop
+--
+-- The old profile asked for both gone - `gryphons = 'NONE'` and
+-- `hideArt = true` - and the design first read those as "nothing to do",
+-- because in DragonflightUI they were telling DFUI not to draw art of its
+-- own. True, and beside the point: on a stock client Blizzard's gryphons are
+-- right there, and the intent was plainly to be rid of them.
+--
+-- This is appearance, not position, so it is HelloUI's job. The
+-- delegate-to-Edit-Mode rule is about anchors; philosophy #1 is explicitly
+-- "keep Blizzard's frames, change their appearance".
+--
+-- Blizzard's own HideBarArt setting drives exactly these two frames through
+-- MainActionBarMixin:UpdateEndCaps, so this hides what that hides:
+-- MainMenuBar - the backdrop, its end caps and the max-level bar - and
+-- MainActionBar.EndCaps, the compact gryphons used once the bar has been
+-- moved off its default spot.
+--
+-- Deliberately NOT routed through EditModeManagerFrame:OnSystemSettingChange.
+-- That writes manager state in our taint context and persists into the
+-- player's saved layout; hiding two unprotected art frames does neither and
+-- is trivially reversible.
+--
+-- One casualty, and it is the same one Blizzard's own setting has:
+-- MainMenuBarPerformanceBarFrame, the latency strip, lives inside MainMenuBar
+-- and goes with it. The micro menu and the bag bar do not - both are children
+-- of UIParent on this build, so they stay put.
+--------------------------------------------------------------------------
+
+local function artFrames()
+    local bar = _G["MainActionBar"]
+    return _G["MainMenuBar"], bar and bar.EndCaps
+end
+
+local function hideArt()
+    local menuBar, endCaps = artFrames()
+    if menuBar then menuBar:SetShown(false) end
+    if endCaps then endCaps:SetShown(false) end
+end
+
+local function applyBarArt()
+    if Config:Enabled("hideBarArt") then
+        hideArt()
+        return
+    end
+
+    -- Restoring asks Blizzard which of the two belongs on screen rather than
+    -- showing both: that choice depends on whether the bar is still in its
+    -- default position, and UpdateEndCaps already knows the rule.
+    local bar = _G["MainActionBar"]
+    if bar and bar.UpdateEndCaps then
+        pcall(bar.UpdateEndCaps, bar, false)
+        return
+    end
+
+    local menuBar, endCaps = artFrames()
+    if menuBar then menuBar:SetShown(true) end
+    if endCaps then endCaps:SetShown(true) end
+end
+
+function Bars:Init()
+    local bar = _G["MainActionBar"]
+    if bar and bar.UpdateEndCaps then
+        -- Hooking the INSTANCE, not MainActionBarMixin. Mixin() copies the
+        -- function onto the frame when it is created, so hooking the mixin
+        -- table afterwards reaches no existing frame - the mistake that made
+        -- the old UpdateHotkeys hook silently inert.
+        hooksecurefunc(bar, "UpdateEndCaps", function()
+            if Config:Enabled("hideBarArt") then hideArt() end
+        end)
+        Bars.hookedEndCaps = true
+    end
+end
+
 function Bars:Apply()
     local off = Config:GetTable("barsOff")
     local enabled = Config:Get("enabled")
+
+    applyBarArt()
 
     for _, def in ipairs(BARS) do
         -- With the addon switched off every bar goes back to whatever the
@@ -240,6 +317,13 @@ function Bars:Status()
             end
         end
     end
+    local menuBar, endCaps = artFrames()
+    ns:Print("bar art: %s |cff808080(MainMenuBar=%s, EndCaps=%s, hook=%s)|r",
+        Config:Enabled("hideBarArt") and "hidden" or "shown",
+        menuBar and tostring(menuBar:IsShown()) or "missing",
+        endCaps and tostring(endCaps:IsShown()) or "missing",
+        tostring(Bars.hookedEndCaps or false))
+
     if #list == 0 then
         ns:Print("bars: all shown")
         return

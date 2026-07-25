@@ -27,10 +27,14 @@ of them either removes something or makes some text permanently visible. No unit
 frame was ever repositioned. Nothing in Tooltip, Buffs, Flyout or Bossframe was
 ever set. A 72 MB retail-art overhaul was being run as a small behaviour layer.
 
-Three of those fifteen entries are not even changes to Blizzard's UI — they are
-DragonflightUI being told to stop adding its own art (`gryphons = 'NONE'`,
-`hideArt = true`, `changeTradeskill = false`). On a stock client those are
-satisfied by not writing the code in the first place.
+One of those fifteen entries is not a change to Blizzard's UI at all — it is
+DragonflightUI being told to stop reskinning the tradeskill window
+(`changeTradeskill = false`), satisfied on a stock client by not writing the
+code. Two more looked like that and were not: `gryphons = 'NONE'` and
+`hideArt = true` were DFUI declining to draw art *of its own*, which is true
+and beside the point, because Blizzard's gryphons and bar backdrop are right
+there on a stock client. Reading the mechanism and losing sight of the intent
+cost a real feature; it is implemented now. See *Current scope*.
 
 And 1.15.9 brought Blizzard Edit Mode to Era. The layout engine DragonflightUI
 reimplements — anchors, offsets, per-bar positioning, its own edit mode — now
@@ -66,9 +70,10 @@ ships in the client.
 
 ## Current scope
 
-Eight features, each independently toggleable. The profile implied nine; the
-ninth — pinning the chat frame — turned out to belong to Edit Mode, for the
-same reason the minimap tuck did. See *Out of scope*.
+Nine features, each independently toggleable. Two changes from the first
+count: pinning the chat frame turned out to belong to Edit Mode, for the same
+reason the minimap tuck did (see *Out of scope*), and hiding the main bar art
+turned out to be real work rather than the no-op it first looked like.
 
 - **Button text stripping** — keybind text and macro name to alpha 0 across
   bars 1–8, the stance bar and the pet bar. The single most-set value in the old
@@ -91,6 +96,15 @@ same reason the minimap tuck did. See *Out of scope*.
   Mind the numbering. DragonflightUI bound its `bar4` to `MultiBarLeft`, which
   the game calls bar 5. HelloUI follows Blizzard, so the same physical bar is
   `bar5` here and the labels match the game's own options panel.
+- **Main bar art** — hide the gryphons and the bar backdrop. Appearance rather
+  than position, so this is HelloUI's job and not Edit Mode's; the
+  delegate-to-Edit-Mode rule is about anchors. It drives the same two frames
+  Blizzard's own `HideBarArt` drives (`MainMenuBar` and `MainActionBar.EndCaps`,
+  via `MainActionBarMixin:UpdateEndCaps`) by hiding them directly, rather than
+  through `OnSystemSettingChange` — which would write manager state in our taint
+  context and persist into the player's saved layout. Takes the latency strip
+  with it exactly as Blizzard's setting does; the micro menu and bag bar are
+  children of `UIParent` and unaffected.
 - **Status bar text** — make the XP and reputation bar numbers permanently
   readable instead of mouseover-only. This is one setting, not the profile's
   two, and it is a single CVar write: Blizzard's own
@@ -180,7 +194,8 @@ HelloUI/
 │                      out-of-combat apply queue
 ├── Config.lua      -- defaults, per-character override resolution
 ├── Buttons.lua     -- keybind / macro text alpha across every bar
-├── Bars.lua        -- the bar table; native proxy for 2-8, alpha for the rest
+├── Bars.lua        -- the bar table; native proxy for 2-8, alpha for the
+│                      rest; gryphons and backdrop
 ├── StatusBars.lua  -- the xpBarText cvar
 ├── Player.lua      -- class-coloured player health bar via lockColor
 ├── Darkmode.lua    -- desaturate + tint over an explicit allowlist
@@ -254,8 +269,8 @@ The full deviation set, both accounts. Read straight out of
 | `minimap.hideCalendar` | `true` | Minimap.lua |
 | modules `Darkmode`, `Utility` | `true` (both default `false`) | Darkmode.lua, Friends.lua |
 | module `Chat` | `true` (default `false`) | nothing to do — Edit Mode owns it |
-| `bar1.gryphons` | `'NONE'` | nothing to do — DFUI's own art |
-| `bar1.hideArt` | `true` | nothing to do — DFUI's own decoration |
+| `bar1.gryphons` | `'NONE'` | Bars.lua |
+| `bar1.hideArt` | `true` | Bars.lua |
 | `UI.first.changeTradeskill` | `false` | nothing to do — out of scope |
 | `CharacterStatsPanel.collapsed.attributes` | `true` | out of scope |
 | `RecipeFavorite.favorite` | 5 recipes | out of scope |

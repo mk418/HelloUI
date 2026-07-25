@@ -124,8 +124,14 @@ local keybindCheck = SettingCheck("Keybind", "Hide keybind text", barsHeader, "B
 local macroCheck = SettingCheck("Macro", "Hide macro name text", keybindCheck, "BOTTOMLEFT", 0, -4,
     "hideMacroText")
 
+local barArtCheck = SettingCheck("BarArt", "Hide the gryphons and bar backdrop",
+    macroCheck, "BOTTOMLEFT", 0, -4, "hideBarArt",
+    "The same two frames Blizzard's own Edit Mode 'Hide Bar Art' drives. " ..
+    "Takes the latency strip with it, exactly as Blizzard's setting does; " ..
+    "the micro menu and bags are unaffected.")
+
 local offLabel = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-offLabel:SetPoint("TOPLEFT", macroCheck, "BOTTOMLEFT", 2, -8)
+offLabel:SetPoint("TOPLEFT", barArtCheck, "BOTTOMLEFT", 2, -8)
 offLabel:SetText("Bars switched off:")
 
 -- The eight numbered bars in one tight row - their labels are single digits,

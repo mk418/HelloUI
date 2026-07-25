@@ -23,6 +23,11 @@ local accountDefaults = {
     hideKeybindText = true,
     hideMacroText   = true,
 
+    -- The gryphons and the main bar backdrop. The old profile asked for both
+    -- (`gryphons = 'NONE'`, `hideArt = true`); on a stock client that is real
+    -- work rather than the no-op it looked like. See Bars.lua.
+    hideBarArt = true,
+
     -- Bars.lua. One bar was switched off on every character - and mind the
     -- numbering. The old profile called it "bar4", but DragonflightUI bound
     -- its bar4 to MultiBarLeft, which the game itself calls bar 5

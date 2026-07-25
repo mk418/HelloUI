@@ -316,7 +316,20 @@ end
 Frame.new("GameTimeFrame", cluster)
 
 -- Action bar art + cast bars
-for i = 0, 3 do _G["MainMenuBarTexture" .. i] = _G.UIParent:CreateTexture("MainMenuBarTexture" .. i) end
+local mainMenuBar = Frame.new("MainMenuBar", _G.UIParent)
+for i = 0, 3 do _G["MainMenuBarTexture" .. i] = mainMenuBar:CreateTexture("MainMenuBarTexture" .. i) end
+-- MainActionBar.EndCaps and the mixin method Blizzard copies onto the frame.
+_G.MainActionBar.EndCaps = Frame.new(nil, _G.MainActionBar)
+_G.MainActionBar.UpdateEndCaps = function(self, forceHide)
+    -- Mirrors MainActionBarMixin:UpdateEndCaps closely enough to test against.
+    if forceHide then
+        mainMenuBar:SetShown(false)
+        self.EndCaps:SetShown(false)
+    else
+        mainMenuBar:SetShown(true)
+        self.EndCaps:SetShown(false)
+    end
+end
 local pcb = Frame.new("PlayerCastingBarFrame", _G.UIParent)
 pcb.Border = pcb:CreateTexture()
 local petcb = Frame.new("PetCastingBarFrame", _G.UIParent)
@@ -462,6 +475,14 @@ eq(_G.GameTimeFrame:IsShown(), false, "time-of-day dial hidden")
 _G.ToggleMinimap()
 eq(_G.GameTimeFrame:IsShown(), false, "still hidden after ToggleMinimap re-shows it")
 
+print("\nbar art")
+eq(mainMenuBar:IsShown(), false, "main bar backdrop hidden")
+eq(_G.MainActionBar.EndCaps:IsShown(), false, "gryphon end caps hidden")
+-- Blizzard re-running its own end-cap logic must not bring them back.
+_G.MainActionBar:UpdateEndCaps(false)
+eq(mainMenuBar:IsShown(), false, "still hidden after Blizzard recomputes end caps")
+ok(ns.Bars.hookedEndCaps, "UpdateEndCaps hooked on the instance")
+
 print("\nchat")
 -- ChatFrame1 inherits EditModeChatFrameSystemTemplate on 1.15.9, so the addon
 -- deliberately owns nothing here. Assert it stays hands-off.
@@ -514,6 +535,7 @@ eq(cvars.xpBarText, "0", "xpBarText restored to its original value when disabled
 eq(healthBar.lockColor, nil, "lockColor handed back to Blizzard when disabled")
 eq(_G.GameTimeFrame:IsShown(), true, "time-of-day dial shown again when disabled")
 eq(_G.PlayerFrameTexture._desat, false, "darkmode restored when disabled")
+eq(mainMenuBar:IsShown(), true, "bar art restored when disabled")
 eq(chat:GetWidth(), 400, "chat still untouched")
 
 _G.SlashCmdList["HELLOUI"]("on")

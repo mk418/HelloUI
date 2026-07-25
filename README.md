@@ -19,6 +19,9 @@ text permanently readable. See `DESIGN.md` for the evidence and the reasoning.
   bar 1, stance and pet by making them invisible and non-interactive, because
   Blizzard offers no toggle for those three and hiding bar 1's frame would drag
   bars 2–8 down with it.
+- **Hides the gryphons and the main bar backdrop** — the same two frames
+  Blizzard's Edit Mode "Hide Bar Art" drives. The latency strip goes with them,
+  as it does under Blizzard's own setting; the micro menu and bags stay.
 - **Keeps the XP and reputation bar numbers on screen** instead of
   mouseover-only. This is Blizzard's `xpBarText` setting, and it covers both
   bars together.
