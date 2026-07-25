@@ -198,11 +198,17 @@ local unitHeader = Header("Unit frames", barTextCheck, "BOTTOMLEFT", 2, -14)
 local classColorCheck = SettingCheck("ClassColor", "Class-colour the player health bar",
     unitHeader, "BOTTOMLEFT", -2, -8, "classColorPlayerHealth")
 
+local castCheck = SettingCheck("CastBar", "Hide the cast bar when a sibling draws one",
+    classColorCheck, "BOTTOMLEFT", 0, -4, "yieldCastBar",
+    "HelloWarrior draws its own cast bar at the top of its cluster, in the " ..
+    "same strip this layout parks Blizzard's in. While it is on screen, " ..
+    "Blizzard's is switched off through the client's own setting for it.")
+
 -- No chat controls. ChatFrame1 inherits EditModeChatFrameSystemTemplate on
 -- 1.15.9, so its size and position belong to Edit Mode for exactly the reasons
 -- the minimap's do.
 local chatNote = panel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
-chatNote:SetPoint("TOPLEFT", classColorCheck, "BOTTOMLEFT", 4, -10)
+chatNote:SetPoint("TOPLEFT", castCheck, "BOTTOMLEFT", 4, -10)
 chatNote:SetWidth(260)
 chatNote:SetJustifyH("LEFT")
 chatNote:SetSpacing(2)

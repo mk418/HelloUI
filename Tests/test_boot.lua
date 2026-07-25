@@ -620,6 +620,12 @@ _G.MainActionBar.UpdateEndCaps = function(self, forceHide)
 end
 local pcb = Frame.new("PlayerCastingBarFrame", _G.UIParent)
 pcb.Border = pcb:CreateTexture()
+-- Blizzard's own switch for "another bar is replacing this one". ShouldShowCastBar
+-- is `self.showCastbar and self.unit ~= nil`, and every path that would show the
+-- bar goes through it, so the flag IS the behaviour - modelling it as a flag is
+-- faithful rather than a simplification.
+pcb.showCastbar = true
+pcb.SetAndUpdateShowCastbar = function(self, show) self.showCastbar = show and true or false end
 local petcb = Frame.new("PetCastingBarFrame", _G.UIParent)
 petcb.Border = petcb:CreateTexture()
 
@@ -657,8 +663,8 @@ end
 local ns = {}
 local FILES = {
     "Core.lua", "Config.lua", "Buttons.lua", "Bars.lua", "StatusBars.lua",
-    "Player.lua", "Darkmode.lua", "Minimap.lua", "Friends.lua", "Layout.lua",
-    "Options.lua",
+    "Player.lua", "Darkmode.lua", "Minimap.lua", "CastBar.lua", "Friends.lua",
+    "Layout.lua", "Options.lua",
 }
 
 print("HelloUI boot harness")
@@ -674,6 +680,27 @@ for _, file in ipairs(FILES) do
             print(("  FAIL  error running %s: %s"):format(file, runErr))
             failures = failures + 1
         end
+    end
+end
+
+-- The list above must BE the TOC, not merely resemble it. A file added to the
+-- addon and forgotten here loads in game and is never exercised offline - the
+-- suite stays green while a whole module goes untested, which is exactly what
+-- happened when CastBar.lua was added.
+do
+    local toc, missing = io.open("HelloUI.toc"), {}
+    if not toc then
+        ok(false, "HelloUI.toc readable")
+    else
+        local listed = {}
+        for _, f in ipairs(FILES) do listed[f] = true end
+        for line in toc:lines() do
+            local file = line:match("^%s*([%w_]+%.lua)%s*$")
+            if file and not listed[file] then missing[#missing + 1] = file end
+        end
+        toc:close()
+        ok(#missing == 0, ("every file in the TOC is loaded by the harness%s"):format(
+            #missing > 0 and (" - missing " .. table.concat(missing, ", ")) or ""))
     end
 end
 
@@ -1329,6 +1356,62 @@ do
     eq(clockBtn:GetScale(), 1, "scale restored when disabled")
     ns.Config:Set("fixClockText", true)
     ns.Minimap:Apply()
+end
+
+print("\ncast bar")
+do
+    -- No sibling drawing one: Blizzard's is left entirely alone. This is the
+    -- half of the feature every non-Warrior gets, so it is asserted first.
+    eq(pcb.showCastbar, true, "Blizzard's cast bar untouched with no sibling bar")
+
+    -- HelloWarrior builds its cluster for Warriors only, so the test is the
+    -- FRAME's existence, not the addon's. An installed-but-inert HelloWarrior on
+    -- a Priest must not cost that Priest their cast bar.
+    _G.C_AddOns = { IsAddOnLoaded = function() return true end }
+    ns:ApplyAll()
+    eq(pcb.showCastbar, true, "and untouched merely because the addon is loaded")
+
+    local hwCluster = Frame.new("HelloWarrior_Container", _G.UIParent)
+    local hwBar = Frame.new("HelloWarrior_CastBar", hwCluster)
+    ns:ApplyAll()
+    eq(pcb.showCastbar, false, "yielded once a sibling is actually drawing one")
+    eq(ns.CastBar.yielded, "HelloWarrior_CastBar", "and it names which one")
+
+    -- /hw bars off hides the cluster, so ours is not on screen either - hand
+    -- Blizzard's back rather than leave the player with no cast bar at all.
+    hwCluster:Hide()
+    ns:ApplyAll()
+    eq(pcb.showCastbar, true, "handed back when the sibling's cluster is hidden")
+    hwCluster:Show()
+    ns:ApplyAll()
+    eq(pcb.showCastbar, false, "and yielded again when it comes back")
+
+    -- Switchable, like every other feature here.
+    ns.Config:Set("yieldCastBar", false)
+    ns:ApplyAll()
+    eq(pcb.showCastbar, true, "restored when the setting is off")
+    ns.Config:Set("yieldCastBar", true)
+    ns:ApplyAll()
+    eq(pcb.showCastbar, false, "and yielded again when it is back on")
+
+    -- Repeated applies must not thrash the flag: Apply runs on every zone
+    -- change, and this is the guard that keeps it a no-op.
+    local writes = 0
+    local realSet = pcb.SetAndUpdateShowCastbar
+    pcb.SetAndUpdateShowCastbar = function(self, show) writes = writes + 1; realSet(self, show) end
+    ns:ApplyAll()
+    ns:ApplyAll()
+    eq(writes, 0, "and a repeated apply writes nothing at all")
+    pcb.SetAndUpdateShowCastbar = realSet
+
+    -- The sibling goes away entirely (disabled, then a reload).
+    _G.HelloWarrior_CastBar = nil
+    _G.HelloWarrior_Container = nil
+    ns:ApplyAll()
+    eq(pcb.showCastbar, true, "and given back when the sibling is gone")
+    eq(ns.CastBar.yielded, nil, "with nothing left recorded")
+    _G.HelloWarrior_Container, _G.HelloWarrior_CastBar = hwCluster, hwBar
+    _G.C_AddOns = { IsAddOnLoaded = function() return false end }
 end
 
 print("\nchat")

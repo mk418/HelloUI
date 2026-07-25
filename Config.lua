@@ -74,6 +74,14 @@ local accountDefaults = {
     -- this is set directly. 0 leaves Blizzard's 1024 alone.
     statusBarWidth = 454,
 
+    -- CastBar.lua. Switch Blizzard's player cast bar off while a sibling addon
+    -- is drawing its own - today that means HelloWarrior, whose cluster sits in
+    -- the same strip the layout parks the cast bar in. Through Blizzard's own
+    -- SetAndUpdateShowCastbar, the call the client itself uses when an overlay
+    -- bar replaces the player's, so there is nothing to fight and nothing to
+    -- re-assert. Off means Blizzard's bar always shows, overlap and all.
+    yieldCastBar = true,
+
     -- Player.lua. The only unit frame setting in the entire old profile.
     classColorPlayerHealth = true,
 

@@ -373,6 +373,20 @@ buttons, Blizzard's art is a minority of the gold on screen. The rest belongs to
 the addons that drew it, three of the four sibling buttons build their ring
 anonymously, and greying them from here would mean the sweep this rule forbids.
 
+**The cast bar yields to a sibling that draws its own — by frame, not by addon.**
+`CastBar.lua` is the family's first executable cross-addon link, and it is
+deliberately the mildest shape available. HelloUI's layout parks
+`PlayerCastingBarFrame` in the strip HelloWarrior's cluster occupies, and moving
+either is the hard version (an Edit Mode system, reverted on every close of Edit
+Mode). So HelloWarrior draws its own bar at the top of its cluster and HelloUI
+switches Blizzard's off through `CastingBarMixin:SetAndUpdateShowCastbar` — the
+client's own call for "another bar is replacing this one", used by
+`OverlayPlayerCastingBarMixin`. The test is `_G.HelloWarrior_CastBar` existing
+and `HelloWarrior_Container` being shown, **not** `IsAddOnLoaded("HelloWarrior")`:
+the addon is inert on non-Warriors, and a Priest with it installed must not lose
+their cast bar. Two named globals, read-only, no reciprocation — HelloWarrior
+does not know this file exists.
+
 **Button text stripping enumerates Blizzard's bars by name.** Never a global
 button sweep, and never "blank every FontString on every button". HelloWarrior
 paints its own compact hotkey label onto its buttons as `btn._hwKeyLabel` (a

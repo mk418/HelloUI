@@ -206,6 +206,7 @@ ns.MODULES = {
     "Player",
     "Darkmode",
     "Minimap",
+    "CastBar",
     "Friends",
 }
 
