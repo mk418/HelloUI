@@ -37,6 +37,7 @@ read_globals = {
     "DEFAULT_CHAT_FRAME",
     "GameTooltip",
     "UnitClass",
+    "UnitName",
 
     -- Namespaced API
     "C_AddOns",

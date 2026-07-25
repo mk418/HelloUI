@@ -240,9 +240,17 @@ SettingCheck("Heart", "Heart icon for notes containing <3",
 -- Buttons and live state
 --------------------------------------------------------------------------
 
+local perCharCheck = SettingCheck("LayoutPerChar", "Give each character its own layout",
+    chatNote, "BOTTOMLEFT", -6, -14, "layoutPerCharacter",
+    "Off: one account-wide Edit Mode layout shared by everyone, matching the " ..
+    "old profile. On: each character gets its own copy, so tuning the priest " ..
+    "no longer moves the warrior's bars. Blizzard allows five layouts of each " ..
+    "kind. Switching modes leaves the old layout in place - delete it in Edit " ..
+    "Mode if you want it gone.")
+
 local resetBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
 resetBtn:SetSize(140, 22)
-resetBtn:SetPoint("TOPLEFT", chatNote, "BOTTOMLEFT", -2, -18)
+resetBtn:SetPoint("TOPLEFT", perCharCheck, "BOTTOMLEFT", 2, -18)
 resetBtn:SetText("Reset settings")
 resetBtn:SetScript("OnClick", function()
     Config:ResetAccount()
@@ -268,14 +276,16 @@ end)
 local layoutBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
 layoutBtn:SetSize(220, 22)
 layoutBtn:SetPoint("TOPLEFT", resetBtn, "BOTTOMLEFT", 0, -8)
-layoutBtn:SetText("Apply the Dragonflight bar layout")
+layoutBtn:SetText("Apply / reset the bar layout")
 layoutBtn:SetScript("OnClick", function() ns.Layout:Apply() end)
 layoutBtn:SetScript("OnEnter", function(self)
     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-    GameTooltip:AddLine("Apply the Dragonflight bar layout", 1, 1, 1)
-    GameTooltip:AddLine("Creates an Edit Mode layout named HelloUI and switches " ..
-        "to it: bars stacked and centred, 80% icons, 2px padding. Your own " ..
-        "layouts are untouched - switch back in Edit Mode any time.", nil, nil, nil, true)
+    GameTooltip:AddLine("Apply / reset the bar layout", 1, 1, 1)
+    GameTooltip:AddLine("Creates HelloUI's Edit Mode layout and switches to it: " ..
+        "bars stacked and centred, 80% icons, 2px padding. Run it again to reset " ..
+        "the layout back to that after you have dragged things around - Edit Mode " ..
+        "saves your changes into the layout, so re-applying is the reset. Your " ..
+        "own layouts are never touched.", nil, nil, nil, true)
     GameTooltip:Show()
 end)
 layoutBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)

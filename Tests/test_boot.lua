@@ -230,6 +230,7 @@ _G.Settings = {
 
 -- Class colours
 _G.UnitClass = function() return "Warrior", "WARRIOR" end
+_G.UnitName = function() return "Elouan" end
 _G.RAID_CLASS_COLORS = { WARRIOR = { r = 0.78, g = 0.61, b = 0.43 }, MAGE = { r = 0.41, g = 0.8, b = 0.94 } }
 _G.LOCALIZED_CLASS_NAMES_MALE = { WARRIOR = "Warrior", MAGE = "Mage" }
 _G.LOCALIZED_CLASS_NAMES_FEMALE = { WARRIOR = "Warrior", MAGE = "Mage" }
@@ -586,6 +587,50 @@ end
 -- Applying twice must not create a second layout.
 ns.Layout:Apply(true)
 eq(#_G._editModeLayouts().layouts, 1, "re-applying refreshes rather than duplicating")
+
+-- Reset: Edit Mode saves dragging into the layout, so re-applying must
+-- overwrite whatever is there with the shipped geometry.
+do
+    local live = _G._editModeLayouts()
+    for _, e in ipairs(live.layouts[1].systems) do
+        if e.system == 1 and e.systemIndex == 1 then
+            e.anchorInfo.offsetY = 999          -- "the player dragged it"
+            for _, st in ipairs(e.settings) do
+                if st.setting == 3 then st.value = 9 end   -- and resized it
+            end
+        end
+    end
+    _G.C_EditMode.SaveLayouts(live)
+    ns.Layout:Reset()
+    local after = _G._editModeLayouts()
+    local mainBar
+    for _, e in ipairs(after.layouts[1].systems) do
+        if e.system == 1 and e.systemIndex == 1 then mainBar = e end
+    end
+    eq(mainBar.anchorInfo.offsetY, 30, "reset restores the shipped position")
+    local size
+    for _, st in ipairs(mainBar.settings) do
+        if st.setting == 3 then size = st.value end
+    end
+    eq(size, 3, "reset restores the shipped icon size")
+end
+
+-- Per-character mode: a separate, character-typed, character-named layout.
+ns.Config:Set("layoutPerCharacter", true)
+ns.Layout:Apply(true)
+do
+    local live = _G._editModeLayouts()
+    eq(#live.layouts, 2, "per-character mode adds a second layout")
+    local mine = live.layouts[2]
+    eq(mine.layoutName, "HelloUI - Elouan", "named for the character")
+    eq(mine.layoutType, 2, "typed Character so other characters never see it")
+    eq(live.layouts[1].layoutName, "HelloUI", "the account layout is left alone")
+    eq(live.activeLayout, 2, "and switched to")
+end
+-- ...and re-applying in that mode still does not duplicate.
+ns.Layout:Apply(true)
+eq(#_G._editModeLayouts().layouts, 2, "per-character re-apply refreshes too")
+ns.Config:Set("layoutPerCharacter", false)
 
 print("\nbar art")
 eq(mainMenuBar:IsShown(), false, "main bar backdrop hidden")

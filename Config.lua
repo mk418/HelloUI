@@ -88,6 +88,12 @@ local accountDefaults = {
     -- Mode at all; `/hui layout` still applies it on demand.
     applyLayoutOnce = true,
 
+    -- Account-wide by default, matching the old profile: 47 characters shared
+    -- one arrangement. Turn this on and each character gets its own Edit Mode
+    -- layout instead, so tuning one no longer moves the others. Blizzard caps
+    -- layouts at five per type.
+    layoutPerCharacter = false,
+
     -- Friends.lua.
     friendsClassColor = true,
     friendsHeart = true,

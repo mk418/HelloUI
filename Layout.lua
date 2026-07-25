@@ -16,14 +16,15 @@ local Config = ns.Config
 -- involved: the layout simply is the player's layout, editable and
 -- persistent like any other.
 --
--- NON-DESTRUCTIVE BY CONSTRUCTION. It adds a layout named "HelloUI" and
--- never touches an existing one. Switching back is the layout dropdown in
--- Edit Mode, so the worst case is one extra entry in that list.
+-- NON-DESTRUCTIVE BY CONSTRUCTION. It adds a layout of its own and never
+-- touches an existing one. Switching back is the layout dropdown in Edit
+-- Mode, so the worst case is one extra entry in that list.
 --
--- Applied once, then never again. `layoutAppliedV1` in saved variables is
--- the latch, matching the one-time-migration idiom the era-1159 fork used
--- for its own minimap tuck. If the player then drags a bar, HelloUI must not
--- put it back on the next login - at that point the layout is theirs.
+-- Applied once, then never again - see the latch below. If the player then
+-- drags a bar, HelloUI must not put it back on the next login: at that point
+-- the layout is theirs. Re-applying is an explicit act (`/hui layout`), and
+-- because Edit Mode saves dragging into the layout itself, re-applying IS
+-- the reset.
 --
 -- WHERE THE NUMBERS COME FROM. DragonflightUI's own action bar defaults, in
 -- Modules/Actionbar/Actionbar.lua: buttonScale 0.8, padding 2, bar1 above the
@@ -39,7 +40,69 @@ local Config = ns.Config
 -- block DragonflightUI called bar5 and put on the right.
 --------------------------------------------------------------------------
 
-local LAYOUT_NAME = "HelloUI"
+--------------------------------------------------------------------------
+-- Account-wide or per-character
+--
+-- Edit Mode already has this distinction and it costs nothing to use: a
+-- layout carries a layoutType, and Character layouts are only visible to the
+-- character that owns them. So per-character support is a choice of enum
+-- value and a name, not a mechanism.
+--
+-- Account is the default because that is what the old profile was - 47
+-- characters sharing one arrangement. Switching to per-character gives each
+-- character its own copy to edit, so tuning the priest no longer moves the
+-- warrior's bars.
+--
+-- Names are suffixed in per-character mode so the Edit Mode dropdown stays
+-- readable and so the two modes can coexist without a name collision. The
+-- old account-wide layout is left alone when you switch; delete it in Edit
+-- Mode if you want it gone.
+--
+-- Blizzard caps layouts at 5 per type (Constants.EditModeConsts
+-- .EditModeMaxLayoutsPerType), counted separately for Account and Character,
+-- so creating one can genuinely fail and says so rather than failing quietly.
+--------------------------------------------------------------------------
+
+local BASE_NAME = "HelloUI"
+local MAX_PER_TYPE = 5
+
+local function perCharacter()
+    return Config:Get("layoutPerCharacter") and true or false
+end
+
+local function layoutName()
+    if not perCharacter() then return BASE_NAME end
+    local name = UnitName("player")
+    return name and (BASE_NAME .. " - " .. name) or BASE_NAME
+end
+
+local function layoutType()
+    local T = Enum and Enum.EditModeLayoutType
+    if not T then return 1 end
+    if perCharacter() then return T.Character or 2 end
+    return T.Account or 1
+end
+
+-- The auto-apply latch follows the mode: account-wide is a one-off for the
+-- whole account, per-character is a one-off for each character. Turning
+-- per-character on therefore gives every character its own layout as it logs
+-- in, rather than doing nothing until asked.
+local function latchRead()
+    if perCharacter() then
+        return HelloUICharDB and HelloUICharDB.layoutApplied
+    end
+    return HelloUIDB and HelloUIDB.layoutAppliedV1
+end
+
+local function latchWrite()
+    if perCharacter() then
+        HelloUICharDB = HelloUICharDB or {}
+        HelloUICharDB.layoutApplied = true
+    else
+        HelloUIDB = HelloUIDB or {}
+        HelloUIDB.layoutAppliedV1 = true
+    end
+end
 
 -- Raw Edit Mode values, not display values.
 local ICON_SIZE = 3     -- 3 * 10 + 50 = 80%
@@ -204,25 +267,44 @@ function Layout:Apply(silent)
         return false
     end
 
-    local index = layoutIndexByName(info, LAYOUT_NAME)
+    local name = layoutName()
+    local index = layoutIndexByName(info, name)
     local created = false
 
     if index then
-        -- Refresh in place. Only ever the HelloUI layout; the player's own
-        -- layouts are never written to.
+        -- Refresh in place: this is also what "reset it back to the HelloUI
+        -- default" means, since Edit Mode saves any dragging you did straight
+        -- into this layout. Only ever HelloUI's own layout; the player's are
+        -- never written to.
         info.layouts[index].systems = systems
     else
+        local wantType = layoutType()
+
+        -- Blizzard caps each type at 5 and refuses the save past that, so
+        -- check first and say which type is full.
+        local sameType = 0
+        for _, l in ipairs(info.layouts) do
+            if l.layoutType == wantType then sameType = sameType + 1 end
+        end
+        if sameType >= MAX_PER_TYPE then
+            if not silent then
+                ns:Print("layout: |cffff8080you already have %d %s layouts|r - delete one in Edit Mode first",
+                    MAX_PER_TYPE, perCharacter() and "character" or "account")
+            end
+            return false
+        end
+
         if C_EditMode.IsValidLayoutName then
-            local valid, isValid = pcall(C_EditMode.IsValidLayoutName, LAYOUT_NAME)
+            local valid, isValid = pcall(C_EditMode.IsValidLayoutName, name)
             if valid and isValid == false then
-                if not silent then ns:Print("layout: |cffff8080the client rejected the name|r") end
+                if not silent then ns:Print("layout: |cffff8080the client rejected the name '%s'|r", name) end
                 return false
             end
         end
-        local layoutType = (Enum.EditModeLayoutType and Enum.EditModeLayoutType.Account) or 1
+
         table.insert(info.layouts, {
-            layoutName = LAYOUT_NAME,
-            layoutType = layoutType,
+            layoutName = name,
+            layoutType = wantType,
             systems = systems,
         })
         index = #info.layouts
@@ -244,8 +326,9 @@ function Layout:Apply(silent)
     end
 
     Layout.applied = true
-    ns:Print("layout: %s the |cffffd100%s|r Edit Mode layout and switched to it",
-        created and "created" or "refreshed", LAYOUT_NAME)
+    ns:Print("layout: %s the |cffffd100%s|r Edit Mode layout%s and switched to it",
+        created and "created" or "reset", name,
+        perCharacter() and " |cff808080(this character only)|r" or "")
     ns:Print("  |cff808080your own layouts are untouched - switch back any time in Edit Mode|r")
     return true
 end
@@ -260,15 +343,21 @@ end
 
 function Layout:Init()
     if not Config:Get("applyLayoutOnce") then return end
-    if HelloUIDB and HelloUIDB.layoutAppliedV1 then return end
+    if latchRead() then return end
 
     ns:WhenSafe("Layout:first", function()
-        HelloUIDB = HelloUIDB or {}
         -- Latch before applying, not after: a client that rejects the layout
         -- should not retry on every single login.
-        HelloUIDB.layoutAppliedV1 = true
+        latchWrite()
         Layout:Apply()
     end)
+end
+
+-- "Reset" and "apply" are the same operation - rebuild from the shipped
+-- geometry and overwrite - because Edit Mode saves your dragging into the
+-- layout itself. Named separately because that is not obvious.
+function Layout:Reset()
+    return Layout:Apply()
 end
 
 function Layout:StatusText()
@@ -288,9 +377,12 @@ function Layout:Status()
         ns:Print("layout: |cffff8080could not read the layout list|r")
         return
     end
-    local index = layoutIndexByName(info, LAYOUT_NAME)
-    ns:Print("layout: %s%s |cff808080(applied once: %s)|r",
-        index and ("the " .. LAYOUT_NAME .. " layout exists at slot " .. index) or "not created",
-        (index and info.activeLayout == index) and ", active" or "",
-        tostring((HelloUIDB and HelloUIDB.layoutAppliedV1) and true or false))
+    local name = layoutName()
+    local index = layoutIndexByName(info, name)
+    ns:Print("layout: %s%s",
+        index and ("|cffffd100" .. name .. "|r exists at slot " .. index) or ("|cffffd100" .. name .. "|r not created"),
+        (index and info.activeLayout == index) and " |cff808080(active)|r" or "")
+    ns:Print("  |cff808080mode: %s, already applied once: %s|r",
+        perCharacter() and "per character" or "account-wide",
+        tostring(latchRead() and true or false))
 end

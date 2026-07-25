@@ -143,10 +143,19 @@ DragonflightUI's layout was its default.
   it is the player's layout, editable and persistent like any other. Existing
   layouts are never modified, so switching back is one dropdown.
 
-  Applied **once**, latched on `layoutAppliedV1`, the same one-time-migration
-  idiom the era-1159 fork used for its minimap tuck. Re-applying every login
-  would undo any bar the player had since dragged, which is the "addon owns
-  your layout" behaviour the whole design is written against.
+  Applied **once**, latched, the same one-time-migration idiom the era-1159
+  fork used for its minimap tuck. Re-applying every login would undo any bar
+  the player had since dragged, which is the "addon owns your layout" behaviour
+  the whole design is written against. And because Edit Mode saves that
+  dragging into the layout, re-applying on demand *is* the reset — there is no
+  separate restore path to get wrong.
+
+  Account-wide or per-character, using Edit Mode's own `layoutType`: `Character`
+  layouts are only visible to the character that owns them, so per-character
+  support is a choice of enum value and a name, not a mechanism. The latch
+  follows the mode, so switching to per-character gives each character its own
+  copy as it logs in. Blizzard caps layouts at 5 per type, counted separately,
+  so creation can genuinely fail and says which type is full.
 - **Options panel** — canvas panel, same shape as the other Hello addons.
 
 ## Out of scope

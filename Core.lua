@@ -305,14 +305,25 @@ SlashCmdList["HELLOUI"] = function(msg)
     elseif cmd == "layout" then
         if rest == "status" then
             ns.Layout:Status()
-        else
+        elseif rest == "char" then
+            ns.Config:Set("layoutPerCharacter", true)
+            ns:Print("layout: switched to per-character layouts")
             ns.Layout:Apply()
+        elseif rest == "account" then
+            ns.Config:Set("layoutPerCharacter", false)
+            ns:Print("layout: switched to one account-wide layout")
+            ns.Layout:Apply()
+        else
+            -- "reset" and no argument are the same thing: rebuild and
+            -- overwrite, because Edit Mode saves dragging into the layout.
+            ns.Layout:Reset()
         end
     else
         ns:Print("usage: /hui |cff808080[config | on | off | apply | status | reset | char | layout]|r")
         ns:Print("  |cff808080char clear|r         - drop this character's overrides")
         ns:Print("  |cff808080char barsoff <id>|r  - hide bars on this character only")
-        ns:Print("  |cff808080layout|r            - build the Dragonflight bar layout in Edit Mode")
+        ns:Print("  |cff808080layout|r            - build/reset the Dragonflight bar layout")
+        ns:Print("  |cff808080layout char|r       - give this character its own layout")
     end
 end
 

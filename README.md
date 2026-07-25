@@ -35,7 +35,16 @@ text permanently readable. See `DESIGN.md` for the evidence and the reasoning.
 - **Builds DragonflightUI's bar layout** as a real Edit Mode layout named
   `HelloUI` — bars stacked and centred, 80% icons, 2px padding — and switches to
   it once, on first login. Your own layouts are never touched; switch back in
-  Edit Mode any time, or re-apply with `/hui layout`.
+  Edit Mode any time.
+
+  Because Edit Mode saves your dragging into the layout itself, **`/hui layout`
+  is also the reset** — run it again and the bars go back to the shipped
+  arrangement.
+
+  Layouts are account-wide by default, matching the old profile. Tick *Give each
+  character its own layout* (or `/hui layout char`) and each character gets its
+  own copy instead, so tuning the priest stops moving the warrior's bars.
+  Blizzard allows five layouts of each kind.
 
 Defaults reproduce the layout that was already in use, so a fresh install should
 look like the thing it replaced rather than a blank slate.
@@ -67,8 +76,11 @@ chat frame's width and height. Drag and resize them there.
 /hui char clear       drop them
 /hui char barsoff bar1 stance
                       toggle bars off for THIS character only
-/hui layout           (re)build the Dragonflight bar layout in Edit Mode
-/hui layout status    is it there, is it active
+/hui layout           build the bar layout - or reset it back after you have
+                      dragged things around
+/hui layout char      give this character its own layout
+/hui layout account   go back to one shared layout
+/hui layout status    is it there, is it active, which mode
 ```
 
 ## Per-character overrides
