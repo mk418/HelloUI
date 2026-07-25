@@ -32,6 +32,21 @@ local Config = ns.Config
 --     touches a button, because Masque may have replaced those objects
 --     outright and the user chose that skin.
 --
+-- TINT BEZELS, NEVER PAYLOADS. The test for whether a Blizzard texture belongs
+-- on this list: are its pixels fixed for the session, or does some code path
+-- write them as a function of game state? A ring is frame art. What sits inside
+-- the ring usually is not:
+--
+--   MiniMapTrackingIcon        SetTexture(GetTrackingTexture()) - it IS which
+--                              tracking you have on, and greying it makes two
+--                              different tracking spells look alike.
+--   LFGMinimapFrameIconTexture the animated eye, TexCoord-walked frame by frame
+--                              while a listing is live.
+--
+-- Both are left alone, which is why the tracking button ends up a grey ring
+-- around a coloured icon - the same relationship an action button has to its
+-- bar. This is the same rule that keeps buff borders off the list.
+--
 -- TWO AREAS FROM THE OLD PROFILE ARE DELIBERATELY GONE:
 --
 --   buffs - there is no stock target. 1.15.9 buff buttons are anonymous
@@ -84,6 +99,60 @@ local ENTRIES = {
         local b = _G["MinimapZoomOut"]
         return b and b.GetDisabledTexture and b:GetDisabledTexture()
     end },
+
+    -- The gold rings around the minimap BUTTONS. MinimapBorder above is the
+    -- MAP's ring; greying that and leaving these sitting on top of it is what
+    -- "the minimap icons still have gold" was looking at.
+    --
+    -- All four are the same file, Interface\Minimap\MiniMap-TrackingBorder, and
+    -- every one is reached by the name Blizzard's own XML gives it. That is the
+    -- whole safety argument: no enumeration, so the four Hello*MinimapButtons
+    -- parked on the Minimap frame cannot be caught by construction.
+    --
+    --   MiniMapTrackingBorder     MinimapTracking_Simple.xml:18
+    --   LFGMinimapFrameBorder     LFGFrame_Minimap.xml:25
+    --   MiniMapMailBorder         Minimap.xml:111
+    --   MiniMapBattlefieldBorder  Minimap.xml:166
+    --
+    -- Hidden is not absent: the mail and battlefield frames stay hidden until
+    -- mail arrives or a queue starts, but their textures exist from login, so a
+    -- one-shot tint is already in place when Blizzard shows them. Same argument
+    -- the zoom buttons' DISABLED textures are already here under.
+    --
+    -- MiniMapWorldBorder is the fifth declaration of that texture and is
+    -- deliberately absent: Classic/Minimap_Overrides.lua defines
+    -- MiniMap_ShouldShowWorldMapButton() as `return false` on Era, so the button
+    -- is never shown and listing it would only inflate the found count.
+    { area = "minimap", get = function() return _G["MiniMapTrackingBorder"] end },
+    { area = "minimap", get = function() return _G["LFGMinimapFrameBorder"] end },
+    { area = "minimap", get = function() return _G["MiniMapMailBorder"] end },
+    { area = "minimap", get = function() return _G["MiniMapBattlefieldBorder"] end },
+
+    -- The minimise button at the right end of the header bar, which sits
+    -- directly ON art this list already greys and was measured as the single
+    -- most saturated thing left in the cluster. Normal AND pushed: tinting only
+    -- the resting state makes it flash gold on every click of a button that is
+    -- otherwise grey. Its highlight is left alone - alphaMode="ADD", drawn only
+    -- under the cursor, and tinting an additive glow just dims the feedback.
+    { area = "minimap", get = function()
+        local b = _G["MinimapToggleButton"]
+        return b and b.GetNormalTexture and b:GetNormalTexture()
+    end },
+    { area = "minimap", get = function()
+        local b = _G["MinimapToggleButton"]
+        return b and b.GetPushedTexture and b:GetPushedTexture()
+    end },
+
+    -- The compass markers, a mutually exclusive pair driven by the rotateMinimap
+    -- CVar: MinimapClusterMixin:OnUpdateRotationSetting shows one and hides the
+    -- other and re-textures neither, so one tint holds across a rotation toggle.
+    -- NorthTag is the gold N visible by default and is the brightest thing left
+    -- on the rim once the border around it is grey; CompassTexture is the ring
+    -- that replaces it when rotation is on. Both, or darkmode is correct in one
+    -- rotation mode and wrong in the other. Neither is live state - a marker's
+    -- meaning is its position, not its colour.
+    { area = "minimap", get = function() return _G["MinimapNorthTag"] end },
+    { area = "minimap", get = function() return _G["MinimapCompassTexture"] end },
 
     -- Action bar art only. MainMenuBarTexture0-3 are the bar backdrop
     -- panels. Nothing here reaches a button.

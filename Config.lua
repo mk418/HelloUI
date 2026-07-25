@@ -112,13 +112,22 @@ local accountDefaults = {
     fixTrackingIcon = true,
 
     -- Where on the minimap's rim it lands, in degrees around the map from the
-    -- LFG eye, counting downwards. 30 is one button-width of arc at that
-    -- radius, so it clears the eye and rides the same circle.
+    -- LFG eye, counting downwards.
+    --
+    -- 19, not the 30 this shipped with. 30 was reasoned from the 33x33 FRAMES,
+    -- and the frames are much bigger than the art they carry: the visible gold
+    -- ring measures about 26.5 units across, so 30 degrees left a 15.7-unit
+    -- hole between the two rings. The number that matters is the rim's own
+    -- pitch - the twelve buttons on this minimap ride one circle and the packed
+    -- pairs sit a median 24.9 units apart, essentially touching. At r=75 the
+    -- chord for 19 degrees is 24.8. Measured off a screenshot rather than
+    -- reasoned about, because the last two attempts at this were reasoned about.
     --
     -- A setting rather than a constant because the rim belongs to every addon
     -- that puts a button there, and this addon cannot see those. `/hui tracking
-    -- <degrees>` moves it live; negative goes up instead of down.
-    trackingAngle = 30,
+    -- <degrees>` moves it live; negative goes up instead of down. There is no
+    -- clamp - a deliberate 45 is a legitimate answer to a crowded rim.
+    trackingAngle = 19,
 
     -- Compensates the clock's scale so its text renders at native size and on
     -- the pixel grid even with the minimap scaled up, and rounds Blizzard's
@@ -219,6 +228,28 @@ function Config:Init()
         HelloUIDB.barsBaseV2 = true
         HelloUIDB.barsOff = copy(accountDefaults.barsOff)
     end
+
+    -- Same trap, one setting over: every install that has ever logged in has
+    -- `trackingAngle = 30` written to disk, so moving the default to 19 cannot
+    -- reach it. See the comment above - defaults cannot migrate state.
+    --
+    -- Value-guarded, unlike barsBaseV2. barsOff is a table and had to be
+    -- replaced wholesale; this is a scalar, so "only rewrite it if it is still
+    -- literally the old default" is available, and that is what protects
+    -- somebody who had already run `/hui tracking 45`.
+    --
+    -- The honest hole: a player who deliberately typed `/hui tracking 30` is
+    -- indistinguishable from one who never touched it, and gets moved. There is
+    -- no stored provenance to consult, and the alternative - leaving every 30
+    -- alone - fixes nothing on the installs that have the problem.
+    if not HelloUIDB.trackingAngleV2 then
+        HelloUIDB.trackingAngleV2 = true
+        -- A literal, never accountDefaults: it names the historical value, not
+        -- the current default, and the two must not drift into each other.
+        if HelloUIDB.trackingAngle == 30 then
+            HelloUIDB.trackingAngle = accountDefaults.trackingAngle
+        end
+    end
 end
 
 --------------------------------------------------------------------------
@@ -299,6 +330,11 @@ function Config:ResetAccount()
     -- the migration re-runs at the next login, wiping any bar the player
     -- changed in between.
     HelloUIDB.barsBaseV2 = true
+    -- Same for the tracking angle, and for the same reason: a reset installs
+    -- the current default, so an unlatched migration would sit there waiting to
+    -- overwrite whatever the player dialled in afterwards - as long as they
+    -- happened to dial in 30.
+    HelloUIDB.trackingAngleV2 = true
 end
 
 function Config:ResetChar()

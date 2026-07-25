@@ -128,7 +128,7 @@ DragonflightUI's layout was its default.
   are invisible in the shipped client because only classes with an active
   tracking ability ever see the thing. HelloUI reparents it, supplies the
   initial visibility Blizzard never sets, and places it *polar*: the LFG eye's
-  own offset from the map's centre, rotated 30° around that centre. Rotation is
+  own offset from the map's centre, rotated 19° around that centre. Rotation is
   the point — the rim is a circle, so translating a button "straight down" from
   the eye cuts the chord and lands it 57 units out on a map whose rim is at 70,
   drawn on the map rather than on its edge. Neither of Blizzard's own declared
@@ -144,6 +144,12 @@ DragonflightUI's layout was its default.
   `GetScale()` for exactly this reason in `MinimapClusterMixin:ResetFramePoints`.
   The target is read live off `LFGMinimapFrameBorder` and converted through both
   effective scales, so "match the eye" stays true if anything ever scales it.
+  The 19° is the rim's own measured pitch, not a derivation: the twelve buttons
+  on this minimap ride one circle (fit rms 0.30px) and the packed pairs sit a
+  median 24.9 units apart, essentially touching. The first attempt used 30°,
+  reasoned from the 33×33 *frames* — but the visible ring is only ~26.5 units, so
+  frame-tangent still left a 15.7-unit hole. Art, not hit rects, is what a gap
+  looks like.
 - **Button borders** — Blizzard ships `ActionButtonTemplate`'s `NormalTexture`
   (`UI-Quickslot2`) at `alpha="0.5"`, because on Classic Era it was only ever
   meant to sit on top of the bar backdrop, which is what actually draws the
@@ -354,6 +360,18 @@ both use `SetDesaturated` on their own buttons as *live state*: HelloWarrior for
 its out-of-range tint, HelloTotems for empty-slot placeholder icons. A second
 desaturation pass over those doesn't just look wrong, it corrupts a signal the
 user reads mid-fight. Name the Blizzard textures to touch; touch nothing else.
+
+The minimap area therefore covers Blizzard's own gold and stops there: the map's
+ring and header, both zoom buttons, the four button rings that share
+`MiniMap-TrackingBorder` (tracking, LFG, mail, battlefield), the minimise button
+in the header, and the compass pair. **Tint bezels, never payloads** — a texture
+belongs on the list only if its pixels are fixed for the session. `MiniMapTrackingIcon`
+is `SetTexture`d from `GetTrackingTexture()` and the LFG eye is TexCoord-animated,
+so both stay coloured inside grey rings, the same relationship an action button
+has to its bar. And the honest limit: on a rim carrying a dozen third-party
+buttons, Blizzard's art is a minority of the gold on screen. The rest belongs to
+the addons that drew it, three of the four sibling buttons build their ring
+anonymously, and greying them from here would mean the sweep this rule forbids.
 
 **Button text stripping enumerates Blizzard's bars by name.** Never a global
 button sweep, and never "blank every FontString on every button". HelloWarrior

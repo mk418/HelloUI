@@ -95,6 +95,12 @@ function Frame:IsMouseEnabled() return self._mouse end
 -- installed, and luacheck lints it as 5.1 where that field does not exist.
 local unpackf = rawget(table, "unpack") or unpack
 function Frame:GetChildren() return unpackf(self._children or {}) end
+-- Real, and it exists to make a rule enforceable rather than because the addon
+-- calls it. Darkmode is forbidden from enumerating Minimap's children; without
+-- GetRegions a sweep that walked them would reach no textures in the harness
+-- and the regression test for that rule could not fail.
+function Frame:GetRegions() return unpackf(self._regions or {}) end
+function Frame:GetNumRegions() return #(self._regions or {}) end
 function Frame:SetSize(w, h) self._w, self._h = w, h end
 -- Real, not no-ops: the status bar width and tracking-icon features read
 -- these back. Anything stubbed here can let a feature "pass" while doing
@@ -526,6 +532,40 @@ lfg:SetRect(1219, 718, 33, 33)
 local lfgBorder = lfg:CreateTexture("LFGMinimapFrameBorder")
 lfgBorder:SetSize(52, 52)
 lfgBorder:SetPoint("TOPLEFT", lfg, "TOPLEFT", 1, -1)
+
+-- The rest of Blizzard's gold on the rim and in the header. Mail and
+-- battlefield are hidden until mail arrives or a queue starts, which is exactly
+-- why their textures have to be tintable while hidden.
+local mailFrame = Frame.new("MiniMapMailFrame", backdrop)
+mailFrame:Hide()
+local mailBorder = mailFrame:CreateTexture("MiniMapMailBorder")
+local bfFrame = Frame.new("MiniMapBattlefieldFrame", backdrop)
+bfFrame:Hide()
+local bfBorder = bfFrame:CreateTexture("MiniMapBattlefieldBorder")
+local northTag = backdrop:CreateTexture("MinimapNorthTag")
+local compass = backdrop:CreateTexture("MinimapCompassTexture")
+local toggleButton = Frame.new("MinimapToggleButton", cluster)
+do
+    local n, p = toggleButton:CreateTexture(), toggleButton:CreateTexture()
+    toggleButton.GetNormalTexture = function() return n end
+    toggleButton.GetPushedTexture = function() return p end
+    toggleButton._normal, toggleButton._pushed = n, p
+end
+
+-- A sibling addon's minimap button, as HelloGear/HelloLog/HelloStock/
+-- HelloWorldBuffs really build one: a named Button parented to Minimap whose
+-- gold ring is an ANONYMOUS texture. Present so the "never enumerate" rule has
+-- something to be broken against - a children sweep would reach this ring, and
+-- greying four siblings' buttons is the regression the rule exists to prevent.
+local siblingButton = Frame.new("HelloGearMinimapButton", minimap)
+local siblingRing = siblingButton:CreateTexture()
+
+-- And a live-state texture of the kind HelloWarrior and HelloTotems keep on
+-- their own buttons: desaturation here is a signal (out of range, empty slot),
+-- so a second pass over it corrupts something read mid-fight.
+local liveStateIcon = Frame.new("HelloTotemsSlot1", _G.UIParent):CreateTexture()
+liveStateIcon:SetDesaturated(true)
+liveStateIcon:SetVertexColor(1, 0.4, 0.4, 1)
 -- Deliberately given a parent already. A guard that skipped the fix when the
 -- frame "looked parented" is what made the icon vanish a second time, so the
 -- reparent has to happen regardless of what it is attached to.
@@ -1078,11 +1118,17 @@ do
         ("on exactly the LFG eye's circle (%.0f vs %.0f), because rotation preserves radius")
             :format(trackR, lfgR))
 
-    -- Below the eye, and far enough below not to be drawn on top of it.
+    -- Below the eye, and PACKED against it. The first version of this asserted
+    -- a full 33-unit frame width of separation, which is the gap the user then
+    -- complained about: the frames are 33 but the visible gold ring is only
+    -- about 26.5, so frame-tangent still reads as a hole. The rim's twelve
+    -- buttons sit a median 24.9 units apart, essentially touching, and that
+    -- measured pitch is the target.
     local ldx, ldy = lx - mx, ly - my
     ok(ty < ldy, "below the LFG eye, which is the direction that was asked for")
     local gap = math.sqrt((tx - ldx) ^ 2 + (ty - ldy) ^ 2)
-    ok(gap >= 32, ("clear of the eye by a full button (%.0f units apart)"):format(gap))
+    ok(gap > 22 and gap < 28,
+        ("packed against the eye like the rim's own buttons (%.1f units apart, they sit 24.9)"):format(gap))
 
     -- The ring's SIZE, which is a separate defect from its position: the same
     -- texture file that the eye declares 52x52 is declared 64x64 here, on an
@@ -1196,14 +1242,25 @@ do
     _G.MiniMapTrackingFrame = nil
     ns.Minimap:Apply()
 
-    -- Nudgeable, because which rim slots other addons' buttons have taken is
-    -- not knowable from in here.
+    -- Nudgeable, and the nudge is honoured EXACTLY. Asserted against the angle
+    -- recomputed here rather than against a direction, because a clamp - say
+    -- "18 to 20, the sensible band" - passes every other check in this block
+    -- while silently turning a deliberate 45 into 20.
+    ns.Minimap:NudgeTracking(45)
+    do
+        local _, _, _, fx, fy = tracking:GetPoint(1)
+        local rad = 45 * math.pi / 180
+        local c, s = math.cos(rad), math.sin(rad)
+        local ex, ey = ldx * c - ldy * s, ldx * s + ldy * c
+        ok(math.abs(fx - ex) < 1e-9 and math.abs(fy - ey) < 1e-9,
+            "an out-of-band angle is honoured exactly, not clamped to a tidy range")
+    end
     ns.Minimap:NudgeTracking(90)
     local _, _, _, rx, ry = tracking:GetPoint(1)
     local rimR = math.sqrt(rx * rx + ry * ry)
     ok(math.abs(rimR - lfgR) < 0.5, "a nudge moves it round the rim, not off it")
-    ok(ry < ty, "and 90 degrees is further down than 30")
-    ns.Minimap:NudgeTracking(30)
+    ok(ry < ty, "and 90 degrees is further down than the default")
+    ns.Minimap:NudgeTracking(19)
 
     -- Restoration, deliberately placed after all those repeated Applies: it is the
     -- SECOND and later Apply that catches an original recorded unconditionally,
@@ -1289,6 +1346,41 @@ ok(dr == 0.4 and dg == 0.4 and db == 0.4, "player frame art tinted 0.4 grey")
 eq(_G.MainMenuBarTexture0._desat, true, "action bar art desaturated")
 eq(cluster.BorderTop._desat, true, "minimap header art desaturated")
 
+-- The gold on the minimap buttons, which is what "the minimap icons still have
+-- gold" was about. Blizzard's own art, every piece reached by name.
+for label, tex in pairs({
+    ["tracking ring"]    = trackingBorder,
+    ["LFG eye ring"]     = lfgBorder,
+    ["mail ring"]        = mailBorder,
+    ["battlefield ring"] = bfBorder,
+    ["north tag"]        = northTag,
+    ["compass ring"]     = compass,
+    ["minimise button"]  = toggleButton._normal,
+    ["its pushed state"] = toggleButton._pushed,
+}) do
+    eq(tex._desat, true, ("%s desaturated"):format(label))
+    local tr = select(1, tex:GetVertexColor())
+    eq(tr, 0.4, ("%s tinted"):format(label))
+end
+-- Hidden is not absent: the mail ring was tinted while its frame was hidden, so
+-- it is already grey the moment mail arrives.
+eq(mailFrame:IsShown(), false, "and the mail ring was tinted while still hidden")
+
+-- THE RULE. A sibling addon's minimap button must be untouched - not because
+-- the code avoids it, but because the code never enumerates anything that could
+-- reach it. Its ring is anonymous, exactly as the four real ones are, so only a
+-- children/regions sweep could find it.
+local sr, sg, sb = siblingRing:GetVertexColor()
+ok(sr == 1 and sg == 1 and sb == 1, "a sibling addon's minimap button is never touched")
+eq(siblingRing._desat, false, "nor desaturated")
+
+-- And live state stays live. Asserted on the VERTEX COLOUR as well as the
+-- desaturation flag: SetDesaturated(true) twice is indistinguishable from once,
+-- so the flag alone cannot catch a second pass - the tint can.
+eq(liveStateIcon._desat, true, "a live-state icon keeps its own desaturation")
+local lr, lg = liveStateIcon:GetVertexColor()
+ok(lr == 1 and lg == 0.4, "and its own colour, which a second pass would flatten")
+
 print("\nfriends")
 ns.Friends:Refresh()
 local aliceColor = friendsScroll.buttons[1].name._color
@@ -1331,6 +1423,8 @@ eq(_G._statusContainer:GetWidth(), 1024, "status bar width restored when disable
 eq(_G._statusContainer.StandaloneFrameTexture2:GetWidth(), 240, "and its border art too")
 eq(mainMenuBar:IsShown(), true, "bar art restored when disabled")
 eq(trackingBorder:GetWidth(), 64, "tracking ring handed back to Blizzard when disabled")
+eq(select(1, northTag:GetVertexColor()), 1, "minimap button gold un-tinted when disabled")
+eq(toggleButton._normal._desat, false, "and the minimise button un-desaturated")
 eq(chat:GetWidth(), 400, "chat still untouched")
 
 _G.SlashCmdList["HELLOUI"]("on")
@@ -1432,6 +1526,34 @@ do
     ns.Config:Init()
     eq(HelloUIDB.barsOff.bar2, true, "a bar hidden after a reset survives the next login")
     HelloUIDB.barsOff.bar2 = nil
+end
+
+-- The same trap for the tracking angle. Every install that had ever logged in
+-- carried `trackingAngle = 30`, so moving the default to 19 could not reach the
+-- machine that reported the gap.
+do
+    HelloUIDB = { trackingAngle = 30 }
+    ns.Config:Init()
+    eq(HelloUIDB.trackingAngle, 19, "an install still on the old 30 is migrated")
+    ok(HelloUIDB.trackingAngleV2 == true, "latched so it runs once")
+
+    -- Value-guarded, which is the whole point: a deliberate nudge is not a
+    -- stale default and must survive.
+    HelloUIDB = { trackingAngle = 45 }
+    ns.Config:Init()
+    eq(HelloUIDB.trackingAngle, 45, "but a deliberately nudged angle is left alone")
+
+    -- And once latched, a later 30 is the player's own choice.
+    HelloUIDB.trackingAngle = 30
+    ns.Config:Init()
+    eq(HelloUIDB.trackingAngle, 30, "a 30 chosen after the migration is not re-migrated")
+
+    ns.Config:ResetAccount()
+    ok(HelloUIDB.trackingAngleV2 == true, "reset marks the angle migration done too")
+    HelloUIDB.trackingAngle = 30
+    ns.Config:Init()
+    eq(HelloUIDB.trackingAngle, 30, "so an angle set after a reset survives the next login")
+    ns.Config:ResetAccount()
 end
 
 -- The remembered xpBarText must live in saved variables, or a /reload makes
