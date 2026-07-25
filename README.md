@@ -37,8 +37,10 @@ text permanently readable. See `DESIGN.md` for the evidence and the reasoning.
   sibling addon draws its own cast bar (HelloWarrior puts one at the top of its
   cluster, in the same strip), Blizzard's is switched off through the client's own
   setting for exactly that case, so the two never draw through each other.
-- **Darkmode** — desaturates and tints Blizzard's frame art across unit frames,
-  the minimap, action bar art and cast bars.
+- **Darkmode** — one switch. Desaturates and tints Blizzard's own frame art:
+  unit frames, the minimap and its buttons, the action bar backdrop and the cast
+  bars. Never a sibling addon's icons, and never anything that uses desaturation
+  as a signal.
 - **Puts the tracking button back on the minimap.** On Classic Era Blizzard
   declares it with no parent at all, so it strands itself in the top-left
   corner of the screen next to your player frame.

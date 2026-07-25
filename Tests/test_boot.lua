@@ -1721,10 +1721,13 @@ do
     local RETIRED = { "hideBarArt", "alwaysShowBarText", "hideTimeOfDay",
                       "classColorPlayerHealth", "yieldCastBar", "castBarStyle",
                       -- feature removed outright, not retired into behaviour
-                      "friendsClassColor", "friendsHeart", "buttonBorders" }
+                      "friendsClassColor", "friendsHeart", "buttonBorders",
+                      "darkmodeDesaturate", "darkmodeAreas", "darkmodeTint" }
 
     -- An install that had ticked every one of them, including two set to false.
     for _, key in ipairs(RETIRED) do HelloUIDB[key] = false end
+    -- as a table too, which is how darkmodeAreas was really stored
+    HelloUIDB.darkmodeAreas = { minimap = false, castbar = false }
     HelloUICharDB.overrides.castBarStyle = false
     ns.Config:Init()
     local left = {}
@@ -1753,11 +1756,15 @@ do
     eq(_G.GameTimeFrame:IsShown(), false, "dial still hidden despite a stale false")
     eq(healthBar.lockColor, true, "health bar still class-coloured despite a stale false")
     eq(pcb.Border:GetTexture(), nil, "cast bar still restyled despite a stale false")
+    eq(select(1, northTag:GetVertexColor()), 0.4,
+        "darkmode still covers every area despite stale per-area falses")
 
     -- No checkbox left behind for any of them.
     local boxes = {}
     for _, suffix in ipairs({ "BarArt", "BarText", "TimeOfDay", "ClassColor", "CastBar", "CastStyle",
-                              "Friends", "Heart", "Borders" }) do
+                              "Friends", "Heart", "Borders",
+                              "Desaturate", "Areaunitframes", "Areaminimap",
+                              "Areaactionbars", "Areacastbar" }) do
         if _G["HelloUIOpt" .. suffix] then boxes[#boxes + 1] = suffix end
     end
     ok(#boxes == 0, ("and no checkbox survives for them%s"):format(

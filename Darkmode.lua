@@ -70,32 +70,32 @@ local ENTRIES = {
     -- Blizzard's XML; TargetFrameTextureFrameTexture is reached through
     -- $parent nesting and is dereferenced unguarded by the working fork,
     -- so it resolves on this client.
-    { area = "unitframes", get = function() return _G["PlayerFrameTexture"] end },
-    { area = "unitframes", get = function() return _G["TargetFrameTextureFrameTexture"] end },
-    { area = "unitframes", get = function() return _G["PetFrameTexture"] end },
+    { get = function() return _G["PlayerFrameTexture"] end },
+    { get = function() return _G["TargetFrameTextureFrameTexture"] end },
+    { get = function() return _G["PetFrameTexture"] end },
 
     -- Minimap. The ring border, the header art, and both zoom buttons in
     -- normal and disabled state - the buttons are Enable()/Disable()d rather
     -- than re-textured, so the disabled art really does get shown at the
     -- zoom limits and a one-shot tint on it is enough.
-    { area = "minimap", get = function() return _G["MinimapBorder"] end },
-    { area = "minimap", get = function()
+    { get = function() return _G["MinimapBorder"] end },
+    { get = function()
         local c = _G["MinimapCluster"]
         return c and c.BorderTop
     end },
-    { area = "minimap", get = function()
+    { get = function()
         local b = _G["MinimapZoomIn"]
         return b and b.GetNormalTexture and b:GetNormalTexture()
     end },
-    { area = "minimap", get = function()
+    { get = function()
         local b = _G["MinimapZoomIn"]
         return b and b.GetDisabledTexture and b:GetDisabledTexture()
     end },
-    { area = "minimap", get = function()
+    { get = function()
         local b = _G["MinimapZoomOut"]
         return b and b.GetNormalTexture and b:GetNormalTexture()
     end },
-    { area = "minimap", get = function()
+    { get = function()
         local b = _G["MinimapZoomOut"]
         return b and b.GetDisabledTexture and b:GetDisabledTexture()
     end },
@@ -123,10 +123,10 @@ local ENTRIES = {
     -- deliberately absent: Classic/Minimap_Overrides.lua defines
     -- MiniMap_ShouldShowWorldMapButton() as `return false` on Era, so the button
     -- is never shown and listing it would only inflate the found count.
-    { area = "minimap", get = function() return _G["MiniMapTrackingBorder"] end },
-    { area = "minimap", get = function() return _G["LFGMinimapFrameBorder"] end },
-    { area = "minimap", get = function() return _G["MiniMapMailBorder"] end },
-    { area = "minimap", get = function() return _G["MiniMapBattlefieldBorder"] end },
+    { get = function() return _G["MiniMapTrackingBorder"] end },
+    { get = function() return _G["LFGMinimapFrameBorder"] end },
+    { get = function() return _G["MiniMapMailBorder"] end },
+    { get = function() return _G["MiniMapBattlefieldBorder"] end },
 
     -- The minimise button at the right end of the header bar, which sits
     -- directly ON art this list already greys and was measured as the single
@@ -134,11 +134,11 @@ local ENTRIES = {
     -- the resting state makes it flash gold on every click of a button that is
     -- otherwise grey. Its highlight is left alone - alphaMode="ADD", drawn only
     -- under the cursor, and tinting an additive glow just dims the feedback.
-    { area = "minimap", get = function()
+    { get = function()
         local b = _G["MinimapToggleButton"]
         return b and b.GetNormalTexture and b:GetNormalTexture()
     end },
-    { area = "minimap", get = function()
+    { get = function()
         local b = _G["MinimapToggleButton"]
         return b and b.GetPushedTexture and b:GetPushedTexture()
     end },
@@ -151,28 +151,32 @@ local ENTRIES = {
     -- that replaces it when rotation is on. Both, or darkmode is correct in one
     -- rotation mode and wrong in the other. Neither is live state - a marker's
     -- meaning is its position, not its colour.
-    { area = "minimap", get = function() return _G["MinimapNorthTag"] end },
-    { area = "minimap", get = function() return _G["MinimapCompassTexture"] end },
+    { get = function() return _G["MinimapNorthTag"] end },
+    { get = function() return _G["MinimapCompassTexture"] end },
 
     -- Action bar art only. MainMenuBarTexture0-3 are the bar backdrop
     -- panels. Nothing here reaches a button.
-    { area = "actionbars", get = function() return _G["MainMenuBarTexture0"] end },
-    { area = "actionbars", get = function() return _G["MainMenuBarTexture1"] end },
-    { area = "actionbars", get = function() return _G["MainMenuBarTexture2"] end },
-    { area = "actionbars", get = function() return _G["MainMenuBarTexture3"] end },
+    { get = function() return _G["MainMenuBarTexture0"] end },
+    { get = function() return _G["MainMenuBarTexture1"] end },
+    { get = function() return _G["MainMenuBarTexture2"] end },
+    { get = function() return _G["MainMenuBarTexture3"] end },
 
     -- Cast bars. Border is a parentKey on both frames.
-    { area = "castbar", get = function()
+    { get = function()
         local f = _G["PlayerCastingBarFrame"]
         return f and f.Border
     end },
-    { area = "castbar", get = function()
+    { get = function()
         local f = _G["PetCastingBarFrame"]
         return f and f.Border
     end },
 }
 
-Darkmode.AREAS = { "unitframes", "minimap", "actionbars", "castbar" }
+-- The tint, as a constant rather than a setting. It was configurable in the
+-- old profile - three of those numbers, per area - and nobody was ever going to
+-- pick a different grey. Darkmode is one switch now: on desaturates and tints
+-- every texture on the list above, off hands all of them back.
+local TINT = { r = 0.4, g = 0.4, b = 0.4 }
 
 --------------------------------------------------------------------------
 -- Original state
@@ -218,12 +222,6 @@ end
 
 function Darkmode:Apply()
     local on = Config:Enabled("darkmode")
-    local areas = Config:GetTable("darkmodeAreas")
-    local tint = Config:GetTable("darkmodeTint")
-    local desaturate = Config:Get("darkmodeDesaturate")
-    local r = tint.r or 0.4
-    local g = tint.g or 0.4
-    local b = tint.b or 0.4
 
     local applied, found = 0, 0
 
@@ -231,8 +229,8 @@ function Darkmode:Apply()
         local ok, tex = pcall(entry.get)
         if ok and tex then
             found = found + 1
-            if on and areas[entry.area] then
-                tintOne(tex, desaturate, r, g, b)
+            if on then
+                tintOne(tex, true, TINT.r, TINT.g, TINT.b)
                 applied = applied + 1
             else
                 restoreOne(tex)
@@ -268,15 +266,6 @@ function Darkmode:Status()
         ns:Print("darkmode: off")
         return
     end
-    local tint = Config:GetTable("darkmodeTint")
-    local areas = Config:GetTable("darkmodeAreas")
-    local on = {}
-    for _, area in ipairs(Darkmode.AREAS) do
-        if areas[area] then on[#on + 1] = area end
-    end
-    ns:Print("darkmode: %d of %d art pieces tinted %.2f/%.2f/%.2f%s",
-        Darkmode.applied or 0, Darkmode.found or 0,
-        tint.r or 0.4, tint.g or 0.4, tint.b or 0.4,
-        Config:Get("darkmodeDesaturate") and ", desaturated" or "")
-    ns:Print("  |cff808080areas: %s|r", #on > 0 and table.concat(on, ", ") or "none")
+    ns:Print("darkmode: %d of %d art pieces desaturated and tinted %.2f/%.2f/%.2f",
+        Darkmode.applied or 0, Darkmode.found or 0, TINT.r, TINT.g, TINT.b)
 end

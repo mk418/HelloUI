@@ -73,14 +73,6 @@ local accountDefaults = {
     -- border is dispel-type colour) and `ui` was already a no-op in the old
     -- module. See Darkmode.lua.
     darkmode = true,
-    darkmodeDesaturate = true,
-    darkmodeTint = { r = 0.4, g = 0.4, b = 0.4 },
-    darkmodeAreas = {
-        unitframes = true,
-        minimap    = true,
-        actionbars = true,
-        castbar    = true,
-    },
 
     -- Three shipped defects in one 33-line Blizzard file, all covered by this
     -- one switch because they are all the same button: it is declared with no
@@ -202,6 +194,9 @@ local RETIRED = {
     -- Features removed outright: the friends list and the button borders are
     -- Blizzard's again.
     "friendsClassColor", "friendsHeart", "buttonBorders",
+    -- Darkmode is one switch: the per-area picks, the desaturate toggle and the
+    -- tint colour are gone, the tint being a constant in Darkmode.lua now.
+    "darkmodeDesaturate", "darkmodeAreas", "darkmodeTint",
 }
 
 local function dropRetired(t)

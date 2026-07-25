@@ -219,28 +219,15 @@ local RIGHT = 300
 
 local darkHeader = Header("Darkmode", barsHeader, "TOPLEFT", RIGHT, 0)
 
-local darkCheck = SettingCheck("Darkmode", "Desaturate and tint frame art",
-    darkHeader, "BOTTOMLEFT", -2, -8, "darkmode")
-
-local desatCheck = SettingCheck("Desaturate", "Desaturate (off = tint only)",
-    darkCheck, "BOTTOMLEFT", 12, -4, "darkmodeDesaturate")
-
--- Four areas, not the old profile's six. `buffs` has no stock target and
--- `ui` was already a no-op - see Darkmode.lua.
-local AREAS = {
-    { "unitframes", "Unit frames" },
-    { "minimap",    "Minimap" },
-    { "actionbars", "Action bar art" },
-    { "castbar",    "Cast bar" },
-}
-
-local areaChecks = {}
-for i, def in ipairs(AREAS) do
-    local id, label = def[1], def[2]
-    areaChecks[i] = SubCheck("Area" .. id, label,
-        (i == 1) and desatCheck or areaChecks[i - 1], "BOTTOMLEFT",
-        (i == 1) and 0 or 0, -4, "darkmodeAreas", id)
-end
+-- One switch, no sub-options. It used to carry a desaturate toggle and four
+-- per-area checkboxes; nobody was going to tint the minimap but not the cast
+-- bar, and the tint colour was three numbers nobody was going to change.
+SettingCheck("Darkmode", "Desaturate and tint Blizzard's frame art",
+    darkHeader, "BOTTOMLEFT", -2, -8, "darkmode",
+    "Unit frames, the minimap and its buttons, the action bar backdrop and the " ..
+    "cast bars - Blizzard's own art, desaturated and tinted grey. Never a " ..
+    "sibling addon's icons, and never anything that uses desaturation as a " ..
+    "signal.")
 
 --------------------------------------------------------------------------
 -- Buttons and live state

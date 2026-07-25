@@ -212,13 +212,15 @@ DragonflightUI's layout was its default.
   class. No hook required: `UnitFrameHealthBar_Update` guards its colour write
   with `if not statusbar.lockColor`, so setting `lockColor` makes Blizzard stop
   resetting it. This was the *only* unit frame setting in the entire profile.
-- **Darkmode** — desaturate + tint pass over stock frame art, desaturate on and
-  tint `0.4, 0.4, 0.4` as before, but over four areas rather than the old six.
-  `buffs` is gone because there is no stock target — 1.15.9 aura buttons are
-  anonymous pooled frames and their only border is dispel-type colour, i.e. live
-  state — and `ui` is gone because it was already a no-op upstream:
-  DragonflightUI's `UpdateUI` checked its flag and returned without touching a
-  texture.
+- **Darkmode** — one switch: on desaturates and tints every texture on the
+  allowlist `0.4, 0.4, 0.4`, off hands them all back. The old profile's per-area
+  picks, its desaturate toggle and its tint colour are gone — nobody was going to
+  tint the minimap but not the cast bar, and the grey is a constant in
+  `Darkmode.lua` now. Two of the old six areas never made it either: `buffs`
+  because 1.15.9 aura buttons are anonymous pooled frames whose only border is
+  dispel-type colour (live state), and `ui` because it was already a no-op
+  upstream — DragonflightUI's `UpdateUI` checked its flag and returned without
+  touching a texture.
 - **Minimap** — hide the time-of-day dial. Not a calendar: Era loads
   `GameTime_NoCalendar`, so `GameTimeFrame` here is the sun/moon indicator, with
   no click action at all. No positioning ships — see *Out of scope*.
