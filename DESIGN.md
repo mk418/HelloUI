@@ -402,7 +402,15 @@ instance. The border art is worse: a completed cast runs `Flash:Show()` and then
 and `SetAlpha(0)` loses to the animation, and the outline flashed back for a
 second on every finished cast. The regions are therefore **blanked**
 (`SetTexture(nil)`), not hidden: Blizzard's Show, alpha and animation all still
-run and all still paint nothing. Files are remembered so the art comes back. Size and position stay Edit Mode's.
+run and all still paint nothing. Files are remembered so the art comes back.
+And blanking alone still is not enough, because `CastingBarMixin:SetLook`
+rebuilds the appearance wholesale — border texture, font object and text anchor —
+and `PlayerFrame_DetachCastBar` calls it from
+`EditModeCastBarSystemMixin:ApplySystemAnchor` on every Edit Mode layout update,
+including the one at login that lands after our styling pass. So the style is
+re-applied from a hook on `SetLook`. It is a *partial* undo, which is what made
+it hard to see: justification and the countdown survive it, so the result read as
+a styled bar whose border had inexplicably returned. Size and position stay Edit Mode's.
 
 **Button text stripping enumerates Blizzard's bars by name.** Never a global
 button sweep, and never "blank every FontString on every button". HelloWarrior

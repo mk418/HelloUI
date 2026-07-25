@@ -270,6 +270,32 @@ function CastBar:Init()
     local f = playerBar()
     if not f then return end
 
+    -- THE ONE THAT UNDOES EVERYTHING. CastingBarMixin:SetLook("CLASSIC") rebuilds
+    -- the bar's whole appearance from scratch:
+    --
+    --   self.Border:SetTexture("Interface\CastingBar\UI-CastingBar-Border")  :1015
+    --   self.Text:ClearAllPoints(); self.Text:SetPoint("TOP", 0, 5)          :1028
+    --   self.Text:SetFontObject("GameFontHighlight")                         :1029
+    --
+    -- and it is called from PlayerFrame_DetachCastBar, which
+    -- EditModeCastBarSystemMixin:ApplySystemAnchor runs on EVERY Edit Mode layout
+    -- update - at login after our styling pass, on every close of Edit Mode, and
+    -- on any layout change. So the border came back, the name went back to the
+    -- full-size font, and its box was re-anchored 5 units above the bar's top,
+    -- which is where the classic art has room for it and a flat bar does not.
+    --
+    -- What made this hard to see is that it is a PARTIAL undo: SetLook does not
+    -- touch justification or our countdown, so the result looked like a styled
+    -- bar with the border inexplicably back rather than like Blizzard's own.
+    if f.SetLook then
+        hooksecurefunc(f, "SetLook", function(self)
+            if Config:Enabled("castBarStyle") then
+                ns:SafeCall("CastBar:relook", applyStyle, self)
+            end
+        end)
+        CastBar.hookedLook = true
+    end
+
     -- The colour is the one thing here Blizzard overwrites: UpdateBarFillTexture
     -- re-applies a per-bar-type colour on every cast, channel and interrupt.
     if f.UpdateBarFillTexture then

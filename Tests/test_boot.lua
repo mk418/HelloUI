@@ -669,6 +669,18 @@ pcb._barColor = { 1, 0.7, 0 }
 pcb.SetStatusBarColor = function(self, r, g, b) self._barColor = { r, g, b } end
 pcb.GetStatusBarColor = function(self) return self._barColor[1], self._barColor[2], self._barColor[3] end
 pcb.UpdateBarFillTexture = function(self) self:SetStatusBarColor(1, 0.7, 0) end
+-- CastingBarMixin:SetLook("CLASSIC") rebuilds the appearance from scratch and is
+-- run from PlayerFrame_DetachCastBar on every Edit Mode layout update. Modelled
+-- faithfully, because it undoes three separate parts of the style at once and
+-- that is exactly the bug this stub exists to catch.
+pcb.SetLook = function(self)
+    self.Border:SetTexture("Interface\\CastingBar\\UI-CastingBar-Border")
+    self.Text:ClearAllPoints()
+    self.Text:SetWidth(185)
+    self.Text:SetHeight(16)
+    self.Text:SetPoint("TOP", self, "TOP", 0, 5)
+    self.Text:SetFontObject("GameFontHighlight")
+end
 pcb.showCastbar = true
 pcb.SetAndUpdateShowCastbar = function(self, show) self.showCastbar = show and true or false end
 local petcb = Frame.new("PetCastingBarFrame", _G.UIParent)
@@ -1456,6 +1468,20 @@ do
     eq(pcb.HelloUITimer:GetText(), "0.5", "a channel counts its remainder, not its elapsed")
     pcb:Hide()
 
+    -- THE RE-ASSERTION. Blizzard rebuilds the whole look from SetLook, called by
+    -- PlayerFrame_DetachCastBar on every Edit Mode layout update - at login, on
+    -- every close of Edit Mode, on any layout change. It restores the border art,
+    -- the full-size font and a text box anchored 5 above the bar's top, all in
+    -- one call, so a style applied once loses all three the first time Edit Mode
+    -- so much as refreshes.
+    ok(ns.CastBar.hookedLook, "SetLook hooked on the instance")
+    pcb:SetLook("CLASSIC")
+    eq(pcb.Border:GetTexture(), nil, "border stays blank when Blizzard rebuilds the look")
+    eq(pcb.Text:GetFontObject(), _G.GameFontHighlightSmall or "GameFontHighlightSmall",
+        "and the name stays small")
+    local lp, _, _, lx = pcb.Text:GetPoint(1)
+    ok(lp == "LEFT" and lx == 4, "and stays anchored inside the bar, not 5 above its top")
+
     -- Switchable and restorable, like everything else here.
     ns.Config:Set("castBarStyle", false)
     ns:ApplyAll()
@@ -1467,6 +1493,12 @@ do
     ok(rp == "CENTER" and rx == 0, "and the spell name re-centred")
     eq(select(1, pcb:GetStatusBarColor()), 1, "with Blizzard's own colour recomputed, not remembered")
     eq(pcb.Text:GetFontObject(), "GameFontHighlight", "and Blizzard's own font handed back")
+    -- And the re-assertion hook has to respect the switch too: a SetLook while the
+    -- style is off must leave Blizzard's own look alone rather than quietly
+    -- restyling behind the setting's back.
+    pcb:SetLook("CLASSIC")
+    eq(pcb.Border:GetTexture(), "Interface\\CastingBar\\UI-CastingBar-Border",
+        "and a later SetLook does not restyle while switched off")
     ns.Config:Set("castBarStyle", true)
     ns:ApplyAll()
     eq(pcb.Border:GetTexture(), nil, "and restyled when switched back on")
