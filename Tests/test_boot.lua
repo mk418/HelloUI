@@ -1006,11 +1006,20 @@ do
     ok(math.abs(ty - ly) >= 33, "clear of the LFG icon by at least an icon height")
     ok(lx ~= nil, "LFG icon still where Blizzard put it")
 
-    -- The clock ticker's half-pixel y is what makes its text render smeared.
+    -- The clock rounding is OFF by default: it did not help, and at a 110%
+    -- minimap scale no integer offset lands on a whole screen pixel anyway.
+    -- Blizzard's anchor is left exactly as shipped.
     local _, _, _, cx, cy = clockText:GetPoint(1)
-    eq(cx, 3, "clock text keeps Blizzard's horizontal offset")
-    eq(cy, 2, "but its half-pixel y is rounded to the grid")
-    eq(cy, math.floor(cy), "so the text lands on whole pixels")
+    eq(cx, 3, "clock text left at Blizzard's horizontal offset")
+    eq(cy, 1.5, "and its vertical offset untouched by default")
+
+    -- It still works when asked for, at 100% where the arithmetic holds.
+    ns.Config:Set("fixClockText", true)
+    ns.Minimap:Apply()
+    local _, _, _, _, cy2 = clockText:GetPoint(1)
+    eq(cy2, 2, "opt-in rounding still snaps it to the grid")
+    ns.Config:Set("fixClockText", false)
+    clockText:SetPoint("CENTER", clockBtn, "CENTER", 3, 1.5)
 end
 
 print("\nchat")

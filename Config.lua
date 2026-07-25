@@ -107,15 +107,25 @@ local accountDefaults = {
     -- stranded in the corner of the screen next to the player frame.
     fixTrackingIcon = true,
 
-    -- Blizzard anchors the clock's text at a half-pixel vertical offset, which
-    -- makes it render smeared. Rounds it to the pixel grid. See Minimap.lua.
-    fixClockText = true,
+    -- OFF, because it did not work. Blizzard anchors the clock's text at a
+    -- half-pixel vertical offset and rounding it to the grid seemed obviously
+    -- right, but it made the clock look worse in practice, and the reasoning
+    -- does not survive scrutiny: the minimap is scaled to 110%, so an offset
+    -- of 2 renders at 2.2 screen pixels and no integer offset lands on the
+    -- grid anyway. Blizzard's 1.5 may also be optical rather than accidental.
+    -- Kept behind a setting rather than deleted, since it may be worth
+    -- something at 100% where the arithmetic actually works.
+    fixClockText = false,
 
     -- Minimap size, as Edit Mode's raw slider value: 5 is 100%, 6 is 110%,
-    -- each step 10%. Applied through the layout. Note that a non-integer
-    -- scale puts everything in the minimap subtree - including the clock
-    -- digits - on fractional pixels, so if text there looks soft, 5 is the
-    -- value that does not.
+    -- each step 10%. Applied through the layout.
+    --
+    -- 110% is a non-integer scale, which puts the whole minimap subtree -
+    -- clock digits included - on fractional pixels and softens any text drawn
+    -- there. That is the likely cause of the clock looking off, and it is a
+    -- straight trade: 5 is crisp at the original size, 6 is bigger and
+    -- slightly soft. 10 would be 200%, the next scale that is a whole number,
+    -- and far too large.
     minimapSize = 6,
 
     -- No chat settings. The old profile pinned ChatFrame1 to 460x207 at
