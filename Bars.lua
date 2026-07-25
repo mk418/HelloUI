@@ -86,10 +86,29 @@ end
 
 local suppressed = {}
 
-local function eachButton(def, fn)
+-- Every mouse-enabled thing under a suppressed bar, not just its action
+-- buttons. MainActionBar also owns ActionBarPageNumber (which carries the
+-- page-scroll arrows) and EndCaps, and alpha 0 makes them invisible without
+-- making them unclickable - so a hidden bar 1 would leave two invisible
+-- arrows that still page your bar when you clicked where they used to be.
+--
+-- Walking the bar's own children is safe in a way that walking Minimap's
+-- children is not: nothing outside Blizzard parents anything to an action
+-- bar. The class addons all parent to UIParent, and Masque re-skins buttons
+-- in place rather than reparenting them.
+local function eachMouseTarget(def, fn)
+    local frame = _G[def.frame]
+    if not frame then return end
+
+    fn(frame)
     for i = 1, def.count do
         local btn = _G[def.buttons .. i]
         if btn then fn(btn) end
+    end
+    if frame.GetChildren then
+        for _, child in ipairs({ frame:GetChildren() }) do
+            fn(child)
+        end
     end
 end
 
@@ -99,33 +118,85 @@ local function suppress(def, on)
 
     if on then
         if not suppressed[def.id] then
-            suppressed[def.id] = { alpha = frame:GetAlpha() }
+            local mouse = {}
+            eachMouseTarget(def, function(f)
+                if f.IsMouseEnabled then mouse[f] = f:IsMouseEnabled() end
+            end)
+            suppressed[def.id] = { alpha = frame:GetAlpha(), mouse = mouse }
         end
         frame:SetAlpha(0)
-        -- An alpha-0 frame still takes the mouse, so invisible buttons would
-        -- stay clickable. EnableMouse is not a protected method, but the
-        -- buttons are secure, so this only runs out of combat.
-        frame:EnableMouse(false)
-        eachButton(def, function(btn) btn:EnableMouse(false) end)
+        -- EnableMouse IS a protected function on this build (the client's own
+        -- API documentation flags it), which is why every call here runs
+        -- through the out-of-combat queue. Keybinds are untouched by design -
+        -- HelloWarrior takes over 1-7 with override bindings and still needs
+        -- the underlying buttons live.
+        eachMouseTarget(def, function(f) f:EnableMouse(false) end)
     else
         local saved = suppressed[def.id]
-        frame:SetAlpha(saved and saved.alpha or 1)
-        frame:EnableMouse(true)
-        eachButton(def, function(btn) btn:EnableMouse(true) end)
+        if not saved then return end
+        frame:SetAlpha(saved.alpha or 1)
+        eachMouseTarget(def, function(f)
+            local was = saved.mouse[f]
+            -- Anything that was mouse-disabled before we touched it stays that
+            -- way; blanket EnableMouse(true) would enable frames Blizzard had
+            -- deliberately left off. But `nil` here means we never managed to
+            -- read the original - restore to enabled rather than leaving an
+            -- action bar permanently dead, which is the worse failure.
+            if was == nil then was = true end
+            f:EnableMouse(was)
+        end)
         suppressed[def.id] = nil
     end
 end
 
-local function setProxy(def, shown)
-    if not (Settings and Settings.SetValue and Settings.GetValue) then return false end
+--------------------------------------------------------------------------
+-- The native proxies
+--
+-- Only ever written to turn a bar OFF, and only after remembering what the
+-- player had. The earlier version wrote `not wantOff` for every bar, which
+-- meant any bar the player had switched off in Blizzard's own Action Bars
+-- options got switched back on at the next login - HelloUI silently
+-- overwriting a setting it does not own, in a module whose whole argument is
+-- that Blizzard's setting is the right mechanism.
+--
+-- The remembered value lives in saved variables rather than a file-local,
+-- because a /reload between hiding and un-hiding would otherwise lose it and
+-- restore a guess.
+--------------------------------------------------------------------------
 
-    -- Reading first keeps this idempotent: Settings.SetValue fires the whole
-    -- SetActionBarToggles round trip to the server, and this runs on every
-    -- zone change.
+local function proxyStore()
+    HelloUIDB = HelloUIDB or {}
+    HelloUIDB.proxyOriginals = HelloUIDB.proxyOriginals or {}
+    return HelloUIDB.proxyOriginals
+end
+
+local function getProxy(def)
+    if not (Settings and Settings.GetValue) then return nil end
     local ok, current = pcall(Settings.GetValue, def.proxy)
-    if ok and current == shown then return true end
+    if not ok then return nil end
+    return current
+end
 
-    return pcall(Settings.SetValue, def.proxy, shown)
+local function setProxy(def, wantOff)
+    if not (Settings and Settings.SetValue) then return end
+
+    local store = proxyStore()
+    local current = getProxy(def)
+    if current == nil then return end
+
+    if wantOff then
+        if store[def.id] == nil then store[def.id] = current end
+        if current ~= false then pcall(Settings.SetValue, def.proxy, false) end
+    else
+        -- Restore only what we changed. A bar we never hid is none of our
+        -- business, and store[def.id] == false means the player already had it
+        -- off before we arrived, so it stays off.
+        local original = store[def.id]
+        store[def.id] = nil
+        if original ~= nil and current ~= original then
+            pcall(Settings.SetValue, def.proxy, original)
+        end
+    end
 end
 
 function Bars:Apply()
@@ -133,19 +204,17 @@ function Bars:Apply()
     local enabled = Config:Get("enabled")
 
     for _, def in ipairs(BARS) do
-        -- With the addon switched off every bar goes back on, so `/hui off`
-        -- is a real off rather than a freeze.
+        -- With the addon switched off every bar goes back to whatever the
+        -- player had, so `/hui off` is a real off rather than a freeze.
         local wantOff = enabled and off[def.id] and true or false
 
-        if def.proxy then
-            ns:WhenSafe("Bars:" .. def.id, function()
-                setProxy(def, not wantOff)
-            end)
-        else
-            ns:WhenSafe("Bars:" .. def.id, function()
+        ns:WhenSafe("Bars:" .. def.id, function()
+            if def.proxy then
+                setProxy(def, wantOff)
+            else
                 suppress(def, wantOff)
-            end)
-        end
+            end
+        end)
     end
 end
 

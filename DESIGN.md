@@ -66,8 +66,9 @@ ships in the client.
 
 ## Current scope
 
-Nine features, each independently toggleable, because the source profile is
-effectively nine independent switches.
+Eight features, each independently toggleable. The profile implied nine; the
+ninth — pinning the chat frame — turned out to belong to Edit Mode, for the
+same reason the minimap tuck did. See *Out of scope*.
 
 - **Button text stripping** — keybind text and macro name to alpha 0 across
   bars 1–8, the stance bar and the pet bar. The single most-set value in the old
@@ -112,7 +113,6 @@ effectively nine independent switches.
 - **Minimap** — hide the time-of-day dial. Not a calendar: Era loads
   `GameTime_NoCalendar`, so `GameTimeFrame` here is the sun/moon indicator, with
   no click action at all. No positioning ships — see *Out of scope*.
-- **Chat** — pin `ChatFrame1` to a fixed anchor and size on login.
 - **Friends list class colour** — plus the heart icon for friends whose note
   contains `<3`, ported as-is because it's twenty lines and it's charming.
 - **Options panel** — canvas panel, same shape as the other Hello addons.
@@ -148,6 +148,13 @@ effectively nine independent switches.
 - **Minimap buttons.** Four siblings park a `Hello*MinimapButton` directly on
   the Minimap frame: HelloGear, HelloLog, HelloStock and HelloWorldBuffs.
   HelloUI adds none and touches none.
+- **Chat frame size and position.** `ChatFrame1` inherits
+  `EditModeChatFrameSystemTemplate` on 1.15.9, and Edit Mode's preset carries
+  its anchor *and* its width and height (430x120 at BOTTOMLEFT). So this is the
+  minimap argument again, and it has to be answered the same way or the rule
+  means nothing: a pin would drive the Edit Mode overrides, write manager state
+  in our taint context, and be reverted on the next layout save. The old
+  profile's 460x207 at 42,35 is reproducible in Edit Mode by dragging.
 - **Minimap position.** Stock 1.15.9 already anchors the minimap TOPRIGHT at
   offset 0,0 — both Edit Mode preset layouts say so and the XML agrees — so
   there is nothing to tuck. DragonflightUI's `+7` was compensating for dead
@@ -178,7 +185,6 @@ HelloUI/
 ├── Player.lua      -- class-coloured player health bar via lockColor
 ├── Darkmode.lua    -- desaturate + tint over an explicit allowlist
 ├── Minimap.lua     -- time-of-day dial
-├── Chat.lua        -- ChatFrame1 anchor + size, and `/hui chat save`
 ├── Friends.lua     -- friends-list class colour, <3 heart
 ├── Options.lua     -- canvas options panel
 └── Tests/
@@ -196,7 +202,7 @@ called, and it is mutation-tested to confirm it fails when the code is wrong.
 
 ## Sibling addon boundaries
 
-Every Hello addon in `~/code/mk418` was checked against the nine features. None
+Every Hello addon in `~/code/mk418` was checked against these features. None
 of them overlap: no sibling touches `HotKey`, `MainMenuBar`, `MultiBar`,
 `StanceBar`, `PlayerFrame`, `MinimapCluster`, `GameTimeFrame`,
 `StatusTrackingBarManager`, or repositions `ChatFrame1`. So nothing here is
@@ -246,7 +252,8 @@ The full deviation set, both accounts. Read straight out of
 | `xp.alwaysShowXP`, `rep.alwaysShowRep` | `true` | StatusBars.lua |
 | `player.classcolor` | `true` | Player.lua |
 | `minimap.hideCalendar` | `true` | Minimap.lua |
-| modules `Darkmode`, `Chat`, `Utility` | `true` (all default `false`) | Darkmode.lua, Chat.lua, Friends.lua |
+| modules `Darkmode`, `Utility` | `true` (both default `false`) | Darkmode.lua, Friends.lua |
+| module `Chat` | `true` (default `false`) | nothing to do — Edit Mode owns it |
 | `bar1.gryphons` | `'NONE'` | nothing to do — DFUI's own art |
 | `bar1.hideArt` | `true` | nothing to do — DFUI's own decoration |
 | `UI.first.changeTradeskill` | `false` | nothing to do — out of scope |
@@ -347,6 +354,11 @@ source and an assumption disagreed, the source won.
   no `OnClick` and no `EnableMouse` anywhere — its tooltip script is unreachable.
   Safe to `Hide()`, and `ToggleMinimap` is the only thing in the tree that
   re-shows it, so hook that.
+- **`ChatFrame1` is an Edit Mode system too.** It inherits
+  `EditModeChatFrameSystemTemplate` (`FloatingChatFrame.xml:716`), and the
+  preset layouts set `WidthHundreds`/`WidthTensAndOnes` and the matching height
+  keys, so Edit Mode owns its size as well as its anchor. Easy to miss because
+  the frame is not obviously "a UI system" the way the minimap is.
 - **`MinimapCluster` is an Edit Mode system.** `EditModeSystemMixin:OnSystemLoad`
   replaces `SetPoint`, `ClearAllPoints`, `SetScale`, `SetShown` and `Hide` with
   overrides, the frame is `clampedToScreen`, and `ApplySystemAnchor` reverts

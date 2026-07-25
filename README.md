@@ -27,7 +27,6 @@ text permanently readable. See `DESIGN.md` for the evidence and the reasoning.
   the minimap, action bar art and cast bars.
 - **Hides the minimap's time-of-day dial** (the sun/moon icon — on Classic Era
   it has no click action at all).
-- **Pins the chat frame** to a size and position.
 - **Class-colours the friends list**, and shows a heart next to friends whose
   note contains `<3`.
 
@@ -44,9 +43,10 @@ HelloUI is the only addon in the family that modifies frames it did not create,
 which makes it the only one that can break the others — so where something else
 already covers a thing, that wins.
 
-It also ships no minimap positioning: stock 1.15.9 already anchors the minimap
-flush to the top right, and `MinimapCluster` is an Edit Mode system that reverts
-anything an addon sets. Drag it in Edit Mode.
+It also ships no positioning of any kind. Stock 1.15.9 already anchors the
+minimap flush to the top right, and both `MinimapCluster` and `ChatFrame1` are
+Edit Mode systems that revert whatever an addon sets — Edit Mode even owns the
+chat frame's width and height. Drag and resize them there.
 
 ## Commands
 
@@ -60,7 +60,6 @@ anything an addon sets. Drag it in Edit Mode.
 /hui char clear       drop them
 /hui char barsoff bar1 stance
                       toggle bars off for THIS character only
-/hui chat save        pin the chat frame wherever you have just dragged it
 ```
 
 ## Per-character overrides

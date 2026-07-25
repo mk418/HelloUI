@@ -37,7 +37,23 @@ local Config = ns.Config
 
 local CVAR = "xpBarText"
 
-local original = nil
+-- The player's own value, remembered in saved variables rather than a
+-- file-local. A cvar survives /reload but a file-local does not, so a local
+-- would be re-captured from the value HelloUI itself had just written - and
+-- then "disable the feature" would restore "1" forever, having quietly eaten
+-- the player's real setting on the first reload.
+local function rememberOriginal(value)
+    HelloUIDB = HelloUIDB or {}
+    if HelloUIDB.xpBarTextOriginal == nil then
+        HelloUIDB.xpBarTextOriginal = value
+    end
+end
+
+local function takeOriginal()
+    local v = HelloUIDB and HelloUIDB.xpBarTextOriginal
+    if HelloUIDB then HelloUIDB.xpBarTextOriginal = nil end
+    return v
+end
 
 local function getCVar()
     if C_CVar and C_CVar.GetCVar then return C_CVar.GetCVar(CVAR) end
@@ -56,9 +72,16 @@ function StatusBars:Apply()
     local current = getCVar()
     if current == nil then return end
 
-    if original == nil then original = current end
+    local target
+    if want then
+        rememberOriginal(current)
+        target = "1"
+    else
+        -- Nothing remembered means we never changed it, so there is nothing to
+        -- put back and the player's current value stands.
+        target = takeOriginal() or current
+    end
 
-    local target = want and "1" or original
     if current == target then return end
 
     setCVar(target)

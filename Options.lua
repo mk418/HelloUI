@@ -66,21 +66,27 @@ local function SubCheck(suffix, label, anchor, relPoint, x, y, tableKey, key, to
     return MakeCheck("HelloUIOpt" .. suffix, label, anchor, relPoint, x, y,
         function() return Config:GetTable(tableKey)[key] end,
         function(v)
+            -- Store a real boolean, never nil. Deleting the key looks
+            -- equivalent - every consumer tests truthiness - but Config's
+            -- applyDefaults recurses into these nested tables and refills any
+            -- missing key from the defaults on the next ADDON_LOADED. A
+            -- deleted key is indistinguishable from one never set, so
+            -- unticking "bar 5" would come back ticked at the next login,
+            -- forever.
+            local value = v and true or false
             if Config:HasChar(tableKey) then
-                local t = Config:Get(tableKey)
-                t[key] = v or nil
+                Config:Get(tableKey)[key] = value
             else
                 HelloUIDB[tableKey] = HelloUIDB[tableKey] or {}
-                HelloUIDB[tableKey][key] = v or nil
+                HelloUIDB[tableKey][key] = value
             end
         end,
         tooltip)
 end
 
 -- There are deliberately no sliders. Every setting this panel exposes is a
--- boolean, and the one geometry the addon carries - the chat frame's size and
--- position - is captured from wherever you have dragged the frame with
--- `/hui chat save` rather than dialled in by hand.
+-- boolean, because every geometry the addon might have carried turned out to
+-- belong to Edit Mode.
 
 local function Header(text, anchor, relPoint, x, y)
     local fs = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
@@ -159,9 +165,16 @@ local unitHeader = Header("Unit frames", barTextCheck, "BOTTOMLEFT", 2, -14)
 local classColorCheck = SettingCheck("ClassColor", "Class-colour the player health bar",
     unitHeader, "BOTTOMLEFT", -2, -8, "classColorPlayerHealth")
 
-local chatCheck = SettingCheck("Chat", "Pin the chat frame's size and position",
-    classColorCheck, "BOTTOMLEFT", 0, -4, "chatAnchor",
-    "Re-applies on login. Drag the chat frame yourself and this will put it back.")
+-- No chat controls. ChatFrame1 inherits EditModeChatFrameSystemTemplate on
+-- 1.15.9, so its size and position belong to Edit Mode for exactly the reasons
+-- the minimap's do.
+local chatNote = panel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+chatNote:SetPoint("TOPLEFT", classColorCheck, "BOTTOMLEFT", 4, -10)
+chatNote:SetWidth(260)
+chatNote:SetJustifyH("LEFT")
+chatNote:SetSpacing(2)
+chatNote:SetText("Chat frame size and position are Edit Mode settings on " ..
+    "Classic Era - drag and resize it there.")
 
 -- Right column ---------------------------------------------------------
 
@@ -223,7 +236,7 @@ SettingCheck("Heart", "Heart icon for notes containing <3",
 
 local resetBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
 resetBtn:SetSize(140, 22)
-resetBtn:SetPoint("TOPLEFT", chatCheck, "BOTTOMLEFT", 2, -20)
+resetBtn:SetPoint("TOPLEFT", chatNote, "BOTTOMLEFT", -2, -18)
 resetBtn:SetText("Reset settings")
 resetBtn:SetScript("OnClick", function()
     Config:ResetAccount()

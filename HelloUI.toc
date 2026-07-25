@@ -15,6 +15,5 @@ StatusBars.lua
 Player.lua
 Darkmode.lua
 Minimap.lua
-Chat.lua
 Friends.lua
 Options.lua

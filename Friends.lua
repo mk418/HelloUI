@@ -129,14 +129,14 @@ local function applyToButton(button)
         end
     end
 
-    -- Recycled buttons: if we did not colour this row, put Blizzard's colour
-    -- back rather than leaving whatever the previous occupant had.
-    if not colored and button.HelloUIColored then
-        local fallback = FRIENDS_WOW_NAME_COLOR
-        if fallback then
-            nameText:SetTextColor(fallback.r, fallback.g, fallback.b)
-        end
-    end
+    -- No fallback repaint. Recycling is handled for us: this runs as a
+    -- hooksecurefunc on FriendsFrame_UpdateFriendButton, which has already set
+    -- the correct colour for this row before we get here - and it uses four
+    -- different ones (FRIENDS_WOW_NAME_COLOR online, FRIENDS_GRAY_COLOR
+    -- offline, FRIENDS_BNET_NAME_COLOR for BNet, grey again for offline BNet).
+    -- An earlier version repainted un-coloured rows with FRIENDS_WOW_NAME_COLOR
+    -- to "clean up after recycling", which turned every offline friend blue.
+    -- Leaving Blizzard's colour alone is both simpler and correct.
     button.HelloUIColored = colored
 
     applyHeart(button, note)
@@ -144,10 +144,13 @@ end
 
 function Friends:Refresh()
     -- Repaint whatever is currently on screen. The list is a HybridScrollFrame
-    -- of recycled buttons hanging off FriendsListFrame; walking its buttons is
-    -- how you reach the visible rows without waiting for a scroll.
-    local list = _G["FriendsListFrame"]
-    local buttons = list and list.ScrollFrame and list.ScrollFrame.buttons
+    -- of recycled buttons, and the scroll frame is reached by its GLOBAL name:
+    -- FriendsFrame.xml declares `<ScrollFrame name="FriendsFrameFriendsScrollFrame">`
+    -- as a child of FriendsListFrame with no parentKey, so the tempting
+    -- `FriendsListFrame.ScrollFrame` is nil on this client and silently made
+    -- this whole function a no-op.
+    local scroll = _G["FriendsFrameFriendsScrollFrame"]
+    local buttons = scroll and scroll.buttons
     if not buttons then return end
     for _, button in ipairs(buttons) do
         applyToButton(button)

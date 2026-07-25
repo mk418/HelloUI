@@ -54,10 +54,12 @@ end
 --------------------------------------------------------------------------
 -- Events
 --
--- RegisterEvent is guarded. Passing an event this client doesn't know throws
--- a hard Lua error, and that is exactly how DragonflightUI died on 1.15.9:
--- MINIMAP_PING was removed and its unguarded RegisterEvent took the whole
--- minimap module down on every login. Ask first.
+-- RegisterEvent is guarded. Passing an event this client refuses throws a hard
+-- Lua error, and that is exactly how DragonflightUI died on 1.15.9: the client
+-- answered RegisterEvent("MINIMAP_PING") with `Attempt to register unknown
+-- event` and the unguarded call took the whole minimap module down on every
+-- login. The event itself still exists - Blizzard just reaches it through
+-- RegisterEventCallback now. Ask first, and have a fallback.
 --------------------------------------------------------------------------
 
 ns.eventFrame = CreateFrame("Frame")
@@ -204,7 +206,6 @@ ns.MODULES = {
     "Player",
     "Darkmode",
     "Minimap",
-    "Chat",
     "Friends",
 }
 
@@ -300,18 +301,10 @@ SlashCmdList["HELLOUI"] = function(msg)
         ns:Print("account settings reset to defaults")
     elseif cmd == "char" then
         ns.Config:CharCommand(rest)
-    elseif cmd == "chat" then
-        if rest == "save" then
-            ns.Chat:Capture()
-            ns:ApplyAllWhenSafe()
-        else
-            ns.Chat:Status()
-            ns:Print("  |cff808080/hui chat save|r - pin it to wherever you have dragged it")
-        end
     else
-        ns:Print("usage: /hui |cff808080[config | on | off | apply | status | reset | char | chat]|r")
-        ns:Print("  |cff808080char clear|r - drop this character's overrides")
-        ns:Print("  |cff808080chat save|r  - pin the chat frame where it is now")
+        ns:Print("usage: /hui |cff808080[config | on | off | apply | status | reset | char]|r")
+        ns:Print("  |cff808080char clear|r         - drop this character's overrides")
+        ns:Print("  |cff808080char barsoff <id>|r  - hide bars on this character only")
     end
 end
 

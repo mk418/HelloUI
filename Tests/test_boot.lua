@@ -70,6 +70,8 @@ function Frame.new(name, parent)
     f._scripts = {}
     f._events = {}
     f._regions = {}
+    f._children = {}
+    if parent and parent._children then parent._children[#parent._children + 1] = f end
     if name then _G[name] = f end
     return f
 end
@@ -89,6 +91,11 @@ function Frame:IsShown() return self._shown end
 function Frame:IsVisible() return self._shown end
 function Frame:SetShown(v) self._shown = v and true or false end
 function Frame:EnableMouse(v) self._mouse = v and true or false end
+function Frame:IsMouseEnabled() return self._mouse end
+-- rawget rather than table.unpack: this harness runs on whatever `lua` is
+-- installed, and luacheck lints it as 5.1 where that field does not exist.
+local unpackf = rawget(table, "unpack") or unpack
+function Frame:GetChildren() return unpackf(self._children or {}) end
 function Frame:SetSize(w, h) self._w, self._h = w, h end
 function Frame:GetWidth() return self._w end
 function Frame:GetHeight() return self._h end
@@ -150,7 +157,16 @@ end
 ----------------------------------------------------------------------
 
 _G.UIParent = Frame.new("UIParent")
-_G.DEFAULT_CHAT_FRAME = { AddMessage = function(_, msg) _G._lastPrint = msg end }
+_G.DEFAULT_CHAT_FRAME = { AddMessage = function(_, msg)
+    _G._lastPrint = msg
+    -- The addon contains its errors with pcall and reports them once. A
+    -- contained error must still fail the harness, or the tests pass while the
+    -- feature quietly does nothing.
+    if tostring(msg):find("error in") then
+        print("  FAIL  addon reported an internal error: " .. tostring(msg))
+        _G._addonErrors = (_G._addonErrors or 0) + 1
+    end
+end }
 _G.GameTooltip = Frame.new("GameTooltip")
 _G.SlashCmdList = {}
 
@@ -317,9 +333,12 @@ chat:SetPoint("BOTTOMLEFT", _G.UIParent, "BOTTOMLEFT", 10, 10)
 chat:SetSize(400, 180)
 
 -- Friends list scroll frame with two recycled buttons
+-- The real client declares this as a GLOBAL child of FriendsListFrame with no
+-- parentKey, so FriendsListFrame.ScrollFrame is nil in game. The stub models
+-- the real shape; an earlier version invented the parentKey and hid a bug.
 local friendsList = Frame.new("FriendsListFrame", _G.UIParent)
-friendsList.ScrollFrame = Frame.new(nil, friendsList)
-friendsList.ScrollFrame.buttons = {}
+local friendsScroll = Frame.new("FriendsFrameFriendsScrollFrame", friendsList)
+friendsScroll.buttons = {}
 for i = 1, 2 do
     local b = Frame.new(nil, friendsList)
     b.index = i
@@ -327,7 +346,7 @@ for i = 1, 2 do
     b.buttonType = _G.FRIENDS_BUTTON_TYPE_WOW
     b.name = b:CreateFontString()
     b.gameIcon = Frame.new(nil, b)
-    friendsList.ScrollFrame.buttons[i] = b
+    friendsScroll.buttons[i] = b
 end
 
 ----------------------------------------------------------------------
@@ -337,8 +356,7 @@ end
 local ns = {}
 local FILES = {
     "Core.lua", "Config.lua", "Buttons.lua", "Bars.lua", "StatusBars.lua",
-    "Player.lua", "Darkmode.lua", "Minimap.lua", "Chat.lua", "Friends.lua",
-    "Options.lua",
+    "Player.lua", "Darkmode.lua", "Minimap.lua", "Friends.lua", "Options.lua",
 }
 
 print("HelloUI boot harness")
@@ -445,13 +463,12 @@ _G.ToggleMinimap()
 eq(_G.GameTimeFrame:IsShown(), false, "still hidden after ToggleMinimap re-shows it")
 
 print("\nchat")
-local p, _, rp, cx, cy = chat:GetPoint(1)
-eq(p, "BOTTOMLEFT", "chat anchored BOTTOMLEFT")
-eq(rp, "BOTTOMLEFT", "chat anchored to UIParent BOTTOMLEFT")
-eq(cx, 42, "chat x")
-eq(cy, 35, "chat y")
-eq(chat:GetWidth(), 460, "chat width")
-eq(chat:GetHeight(), 207, "chat height")
+-- ChatFrame1 inherits EditModeChatFrameSystemTemplate on 1.15.9, so the addon
+-- deliberately owns nothing here. Assert it stays hands-off.
+eq(chat:GetWidth(), 400, "chat width left alone")
+eq(chat:GetHeight(), 180, "chat height left alone")
+local _, _, _, ccx, ccy = chat:GetPoint(1)
+ok(ccx == 10 and ccy == 10, "chat position left alone")
 
 print("\ndarkmode")
 eq(_G.PlayerFrameTexture._desat, true, "player frame art desaturated")
@@ -462,12 +479,12 @@ eq(cluster.BorderTop._desat, true, "minimap header art desaturated")
 
 print("\nfriends")
 ns.Friends:Refresh()
-local aliceColor = friendsList.ScrollFrame.buttons[1].name._color
+local aliceColor = friendsScroll.buttons[1].name._color
 ok(aliceColor and aliceColor[1] == 0.41, "online mage friend class-coloured")
-ok(friendsList.ScrollFrame.buttons[1].HelloUIHeart ~= nil, "heart created for a <3 note")
-eq(friendsList.ScrollFrame.buttons[1].HelloUIHeart:IsShown(), true, "heart shown")
-ok(friendsList.ScrollFrame.buttons[2].HelloUIHeart == nil
-   or friendsList.ScrollFrame.buttons[2].HelloUIHeart:IsShown() == false,
+ok(friendsScroll.buttons[1].HelloUIHeart ~= nil, "heart created for a <3 note")
+eq(friendsScroll.buttons[1].HelloUIHeart:IsShown(), true, "heart shown")
+ok(friendsScroll.buttons[2].HelloUIHeart == nil
+   or friendsScroll.buttons[2].HelloUIHeart:IsShown() == false,
    "no heart on a friend without <3")
 
 ----------------------------------------------------------------------
@@ -497,24 +514,17 @@ eq(cvars.xpBarText, "0", "xpBarText restored to its original value when disabled
 eq(healthBar.lockColor, nil, "lockColor handed back to Blizzard when disabled")
 eq(_G.GameTimeFrame:IsShown(), true, "time-of-day dial shown again when disabled")
 eq(_G.PlayerFrameTexture._desat, false, "darkmode restored when disabled")
+eq(chat:GetWidth(), 400, "chat still untouched")
 
 _G.SlashCmdList["HELLOUI"]("on")
 eq(ns.Config:Get("enabled"), true, "/hui on re-enables")
 eq(_G.ActionButton1.HotKey._alpha, 0, "keybind text hidden again")
 
 print("\nslash commands")
-for _, cmd in ipairs({ "", "status", "apply", "char", "char clear", "chat", "help", "reset" }) do
+for _, cmd in ipairs({ "", "status", "apply", "char", "char clear", "char barsoff bar3", "char barsoff nonsense", "help", "reset" }) do
     local success, err = pcall(_G.SlashCmdList["HELLOUI"], cmd)
     ok(success, ("/hui %s runs without error%s"):format(cmd, success and "" or ": " .. tostring(err)))
 end
-
--- chat save must capture wherever the frame currently is
-chat:ClearAllPoints()
-chat:SetPoint("BOTTOMLEFT", _G.UIParent, "BOTTOMLEFT", 99, 88)
-chat:SetSize(500, 250)
-_G.SlashCmdList["HELLOUI"]("chat save")
-eq(ns.Config:Get("chatX"), 99, "chat save captured x")
-eq(ns.Config:Get("chatHeight"), 250, "chat save captured height")
 
 print("\nper-character overrides")
 ns.Config:SetChar("hideKeybindText", false)
@@ -526,6 +536,104 @@ ns:ApplyAll()
 eq(_G.ActionButton1.HotKey._alpha, 0, "clearing overrides falls back to the account setting")
 
 ----------------------------------------------------------------------
+-- Regressions
+--
+-- One case per bug found in review. Each of these failed on the code as it
+-- was first written, so they are the reason this section exists rather than
+-- decoration.
+----------------------------------------------------------------------
 
+print("\nregressions")
+
+-- The hooks the addon claims to install are actually installed.
+ok(hooks["ToggleMinimap"], "ToggleMinimap hooked (re-hides the dial after a toggle)")
+ok(hooks["FriendsFrame_UpdateFriendButton"], "friends list update hooked")
+ok(hooks["Show"], "GameTimeFrame:Show hooked (catches other addons showing it)")
+
+-- A bar the player switched off in Blizzard's own options must not be
+-- switched back on by us. The first version wrote `not wantOff` for every
+-- proxy bar, so any bar the player had hidden natively came back at login.
+settingValues["PROXY_SHOW_ACTIONBAR_3"] = false
+ns:ApplyAll()
+eq(settingValues["PROXY_SHOW_ACTIONBAR_3"], false,
+    "a bar the player turned off natively is left off")
+settingValues["PROXY_SHOW_ACTIONBAR_3"] = true
+
+-- Hiding then un-hiding a proxy bar restores what the player had, and a bar
+-- they had already hidden themselves stays hidden.
+settingValues["PROXY_SHOW_ACTIONBAR_6"] = false
+ns.Config:SetChar("barsOff", { bar6 = true })
+ns:ApplyAll()
+eq(settingValues["PROXY_SHOW_ACTIONBAR_6"], false, "hiding an already-off bar is a no-op")
+ns.Config:ClearChar("barsOff")
+ns:ApplyAll()
+eq(settingValues["PROXY_SHOW_ACTIONBAR_6"], false,
+    "un-hiding restores the player's own value, not a guess")
+settingValues["PROXY_SHOW_ACTIONBAR_6"] = true
+
+-- Unticking a nested checkbox must store false, not delete the key: Config's
+-- applyDefaults recurses into these tables and would resurrect the default on
+-- the next login.
+local barBox = _G["HelloUIOptBarOffbar5"]
+barBox:SetChecked(false)
+barBox:GetScript("OnClick")(barBox)
+eq(HelloUIDB.barsOff.bar5, false, "unticking stores a real false")
+ns.Config:Init()  -- stands in for the next login
+eq(HelloUIDB.barsOff.bar5, false, "and it survives applyDefaults on the next login")
+barBox:SetChecked(true)
+barBox:GetScript("OnClick")(barBox)
+eq(HelloUIDB.barsOff.bar5, true, "re-ticking stores true")
+
+-- The remembered xpBarText must live in saved variables, or a /reload makes
+-- the addon restore its own value instead of the player's.
+cvars.xpBarText = "0"
+HelloUIDB.xpBarTextOriginal = nil
+ns:ApplyAll()
+eq(cvars.xpBarText, "1", "xpBarText set")
+eq(HelloUIDB.xpBarTextOriginal, "0", "the player's original is persisted")
+-- Simulate a reload: file-locals are gone, saved variables are not.
+ns.Config:Init()
+ns:ApplyAll()
+eq(HelloUIDB.xpBarTextOriginal, "0", "the original survives a reload")
+ns.Config:Set("alwaysShowBarText", false)
+ns:ApplyAll()
+eq(cvars.xpBarText, "0", "disabling restores the player's value, not ours")
+ns.Config:Set("alwaysShowBarText", true)
+ns:ApplyAll()
+
+-- The time-of-day dial must not be Shown while the minimap itself is hidden.
+_G.Minimap:Hide()
+ns.Config:Set("hideTimeOfDay", false)
+ns:ApplyAll()
+eq(_G.GameTimeFrame:IsShown(), false, "dial stays hidden while the minimap is toggled away")
+_G.Minimap:Show()
+ns:ApplyAll()
+eq(_G.GameTimeFrame:IsShown(), true, "dial comes back with the minimap")
+ns.Config:Set("hideTimeOfDay", true)
+ns:ApplyAll()
+
+-- Friends: the scroll frame is reached by its global name. If this regresses
+-- to FriendsListFrame.ScrollFrame the repaint silently does nothing.
+friendsScroll.buttons[1].name._color = nil
+ns.Friends:Refresh()
+ok(friendsScroll.buttons[1].name._color ~= nil, "Friends:Refresh reaches the visible rows")
+
+-- An offline friend must keep Blizzard's grey, not be repainted blue.
+ok(friendsScroll.buttons[2].name._color == nil,
+    "an offline friend is left with Blizzard's own colour")
+
+-- Bar 1's page-scroll arrows live in a child frame, not in ActionButton1..12,
+-- and alpha 0 does not stop them taking clicks.
+local pageNumber = Frame.new(nil, _G.MainActionBar)
+ns.Config:SetChar("barsOff", { bar1 = true })
+ns:ApplyAll()
+eq(pageNumber._mouse, false, "bar1's child frames are made non-interactive too")
+ns.Config:ClearChar("barsOff")
+ns:ApplyAll()
+eq(pageNumber._mouse, true, "and interactive again afterwards")
+
+----------------------------------------------------------------------
+
+failures = failures + (_G._addonErrors or 0)
 print(("\n%d checks, %d failures"):format(checks, failures))
 os.exit(failures == 0 and 0 or 1)

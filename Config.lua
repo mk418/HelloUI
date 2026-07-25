@@ -73,12 +73,10 @@ local accountDefaults = {
     -- Mode's job.
     hideTimeOfDay = true,
 
-    -- Chat.lua. The size the old module pinned ChatFrame1 to.
-    chatAnchor = true,
-    chatX = 42,
-    chatY = 35,
-    chatWidth = 460,
-    chatHeight = 207,
+    -- No chat settings. The old profile pinned ChatFrame1 to 460x207 at
+    -- 42,35, but on 1.15.9 ChatFrame1 inherits EditModeChatFrameSystemTemplate
+    -- and Edit Mode owns its anchor AND its width and height. Same reasoning
+    -- as the minimap: that is Edit Mode's job now.
 
     -- Friends.lua.
     friendsClassColor = true,
@@ -236,7 +234,7 @@ function Config:CharCommand(rest)
     end
 
     if sub == "barsoff" then
-        if arg == "" then
+        local function report()
             local off = Config:GetTable("barsOff")
             local list = {}
             for id, v in pairs(off) do
@@ -246,18 +244,43 @@ function Config:CharCommand(rest)
             ns:Print("bars off here: %s%s",
                 #list > 0 and table.concat(list, ", ") or "none",
                 Config:HasChar("barsOff") and " |cff808080(character override)|r" or " |cff808080(account)|r")
+        end
+
+        if arg == "" then
+            report()
             return
         end
 
-        -- Start from whatever is in force now, so this adds to the account
-        -- layout rather than replacing it wholesale.
+        -- Validate against the real bar table rather than accepting anything
+        -- that looks like a word. A typo used to be stored silently and then
+        -- reported back as if it had worked, which is the worst of both.
+        local valid = {}
+        for _, def in ipairs(ns.BARS or {}) do valid[def.id] = true end
+
         local off = copy(Config:GetTable("barsOff"))
+        local unknown, touched = {}, {}
         for id in arg:gmatch("[%w]+") do
-            off[id] = not off[id] or nil
+            if valid[id] then
+                off[id] = not off[id] and true or false
+                touched[#touched + 1] = id
+            else
+                unknown[#unknown + 1] = id
+            end
         end
+
+        if #unknown > 0 then
+            ns:Print("|cffff8080unknown bar%s:|r %s", #unknown > 1 and "s" or "",
+                table.concat(unknown, ", "))
+            ns:Print("  |cff808080ids: bar1 bar2 bar3 bar4 bar5 bar6 bar7 bar8 stance pet|r")
+        end
+        if #touched == 0 then return end
+
         Config:SetChar("barsOff", off)
         ns:ApplyAllWhenSafe()
-        ns:Print("character bars off: %s", Config:CharOverrideList())
+        -- Report the bars, not the override key. This used to print
+        -- CharOverrideList(), which is the list of overridden SETTING names -
+        -- so it always said "barsOff" no matter which bars you had toggled.
+        report()
         return
     end
 

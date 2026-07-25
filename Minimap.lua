@@ -53,14 +53,23 @@ local function todFrame()
     return _G["GameTimeFrame"]
 end
 
+-- Hide is unconditional; Show is not. ToggleMinimap hides the dial along with
+-- the map and shows it again on the way back, so an unconditional Show in the
+-- restore path would put the sun back on screen with no minimap under it the
+-- moment the feature was switched off while the map was toggled away.
+-- Blizzard's own state is the authority on whether it should be visible at
+-- all, and Minimap:IsShown() is that state.
 local function applyTimeOfDay()
     local f = todFrame()
     if not f then return end
+
     if Config:Enabled("hideTimeOfDay") then
         f:Hide()
-    else
-        f:Show()
+        return
     end
+
+    local map = _G["Minimap"]
+    if not map or map:IsShown() then f:Show() end
 end
 
 function Minimap_:Apply()
