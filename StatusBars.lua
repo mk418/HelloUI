@@ -116,6 +116,23 @@ end
 -- the frame at creation, so hooking the mixin table reaches nothing.
 --------------------------------------------------------------------------
 
+-- The container's border art is a fixed chain of textures anchored
+-- left-to-right from its left edge, and they do not follow the frame: the
+-- standalone set is 16 + 240 + 256 + 256 + 256 = 1024, the main-menu set is
+-- 4 x 256. Resizing the container alone therefore leaves the graphics running
+-- the full original width - Edit Mode's selection box looks correct while the
+-- bar on screen is still 1024 wide, which is exactly the symptom.
+--
+-- Named explicitly rather than walked, because the parentArray they live in
+-- also contains the little 9x9 end caps, which are anchored to the first
+-- segment and must keep their natural size.
+local SEGMENT_CHAINS = {
+    { "StandaloneFrameTexture1", "StandaloneFrameTexture2", "StandaloneFrameTexture3",
+      "StandaloneFrameTexture4", "StandaloneFrameTexture5" },
+    { "MainMenuBarFrameTexture1", "MainMenuBarFrameTexture2",
+      "MainMenuBarFrameTexture3", "MainMenuBarFrameTexture4" },
+}
+
 local savedWidth = {}
 
 local function containers()
@@ -154,6 +171,30 @@ local function wantedWidth(container)
     return barWidth * barScale / ownScale
 end
 
+-- Scale every segment by the same factor so the art keeps its proportions;
+-- stretching only the middle would distort those slices against each other,
+-- since each carries its own TexCoords into the source image.
+local function scaleArt(container, want)
+    for _, chain in ipairs(SEGMENT_CHAINS) do
+        local total = 0
+        local segs = {}
+        for _, key in ipairs(chain) do
+            local tex = container[key]
+            if tex and tex.GetWidth then
+                if savedWidth[tex] == nil then savedWidth[tex] = tex:GetWidth() end
+                total = total + (savedWidth[tex] or 0)
+                segs[#segs + 1] = tex
+            end
+        end
+        if total > 0 then
+            local factor = want and (want / total) or 1
+            for _, tex in ipairs(segs) do
+                tex:SetWidth((savedWidth[tex] or 0) * factor)
+            end
+        end
+    end
+end
+
 local function applyWidth()
     local list = containers()
     if not list then return end
@@ -161,6 +202,7 @@ local function applyWidth()
     for _, container in ipairs(list) do
         local want = wantedWidth(container)
         setWidth(container, want)
+        scaleArt(container, want)
         if container.bars then
             -- Keyed by StatusTrackingBarInfo.BarsEnum, so pairs not ipairs.
             for _, bar in pairs(container.bars) do

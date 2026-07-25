@@ -136,6 +136,15 @@ DragonflightUI's layout was its default.
   and `InitializeBars` stamps that size in again at creation. Re-asserted after
   `UpdateBarVisuals`, hooked on the manager *instance*.
 
+  The **border art has to be scaled separately**. It is a fixed chain of
+  textures anchored left-to-right from the container's edge — standalone is
+  16 + 240 + 256 + 256 + 256 = 1024, main-menu is 4 × 256 — and none of them
+  follow the frame. Resize the container alone and Edit Mode's selection box
+  is correct while the bar drawn on screen is still full width, which is a
+  properly confusing symptom. Every segment scales by the same factor so the
+  slices keep their proportions; the 9×9 end caps share the same `parentArray`
+  and must be left alone, so the segments are named rather than walked.
+
   The width is **derived from `MainActionBar` at apply time, through effective
   scales**, not stored as a constant. `UpdateBarVisuals` calls
   `SetScale(self.ClassicScale)` on the manager, so a width set in the

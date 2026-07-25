@@ -428,6 +428,15 @@ _G.StatusTrackingBarManager.UpdateBarTextVisibility = function() _G._barTextRefr
 do
     local container = Frame.new(nil, _G.StatusTrackingBarManager)
     container:SetSize(1024, 13)
+    -- The border art: a fixed chain anchored left-to-right that does NOT
+    -- follow the frame. Standalone is 16+240+256+256+256 = 1024.
+    for key, w in pairs({ StandaloneFrameTexture1 = 16, StandaloneFrameTexture2 = 240,
+                          StandaloneFrameTexture3 = 256, StandaloneFrameTexture4 = 256,
+                          StandaloneFrameTexture5 = 256 }) do
+        local t = container:CreateTexture()
+        t:SetSize(w, 13)
+        container[key] = t
+    end
     container.bars = {}
     for _, idx in ipairs({ 1, 4 }) do
         local bar = Frame.new(nil, container)
@@ -619,6 +628,21 @@ print("\nstatus bar width")
 do
     local c = _G._statusContainer
     eq(c:GetWidth(), 454, "container narrowed to the action bar stack width")
+
+    -- The frame alone is not enough: the border art is a separate fixed chain
+    -- and leaving it at 1024 is what made Edit Mode look right while the bar
+    -- on screen was still full width.
+    local artTotal = 0
+    for _, key in ipairs({ "StandaloneFrameTexture1", "StandaloneFrameTexture2",
+                           "StandaloneFrameTexture3", "StandaloneFrameTexture4",
+                           "StandaloneFrameTexture5" }) do
+        artTotal = artTotal + c[key]:GetWidth()
+    end
+    ok(math.abs(artTotal - 454) < 1,
+        ("border art spans the frame, not 1024 (got %.1f)"):format(artTotal))
+    -- Proportions preserved: the 16px left cap stays 16/1024 of the total.
+    ok(math.abs(c.StandaloneFrameTexture1:GetWidth() - 454 * 16 / 1024) < 0.5,
+        "art segments scaled proportionally, not stretched unevenly")
     for _, bar in pairs(c.bars) do
         eq(bar:GetWidth(), 454, "inner bar narrowed")
         -- The inner StatusBar has its own explicit width and is anchored only
@@ -938,6 +962,7 @@ eq(_G.GameTimeFrame:IsShown(), true, "time-of-day dial shown again when disabled
 eq(_G.PlayerFrameTexture._desat, false, "darkmode restored when disabled")
 eq(_G.ActionButton1:GetNormalTexture()._alpha, 0.5, "button border back to Blizzard's 0.5")
 eq(_G._statusContainer:GetWidth(), 1024, "status bar width restored when disabled")
+eq(_G._statusContainer.StandaloneFrameTexture2:GetWidth(), 240, "and its border art too")
 eq(mainMenuBar:IsShown(), true, "bar art restored when disabled")
 eq(chat:GetWidth(), 400, "chat still untouched")
 
