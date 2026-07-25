@@ -110,6 +110,14 @@ DragonflightUI's layout was its default.
   Mind the numbering. DragonflightUI bound its `bar4` to `MultiBarLeft`, which
   the game calls bar 5. HelloUI follows Blizzard, so the same physical bar is
   `bar5` here and the labels match the game's own options panel.
+- **Two Blizzard minimap bugs on Era.** The tracking button is declared with no
+  `parent` in `MinimapTracking_Simple.xml`, so it strands itself in the screen's
+  top-left corner — and `MinimapTrackingSimpleMixin` only shows it from
+  `MINIMAP_UPDATE_TRACKING`, which fires when tracking *changes*, so a character
+  logging in with tracking already active leaves it hidden indefinitely. Both
+  are invisible in the shipped client because only classes with an active
+  tracking ability ever see the thing. HelloUI reparents it under the LFG eye
+  and supplies the initial visibility Blizzard never sets.
 - **Button borders** — Blizzard ships `ActionButtonTemplate`'s `NormalTexture`
   (`UI-Quickslot2`) at `alpha="0.5"`, because on Classic Era it was only ever
   meant to sit on top of the bar backdrop, which is what actually draws the

@@ -118,8 +118,11 @@ local accountDefaults = {
     -- the y is rounded to the grid and both are nudgeable with
     -- `/hui clock <x> <y>` because the right optical offset cannot be read
     -- off a screenshot.
-    clockTextX = 3,
-    clockTextY = 2,
+    -- 1, -1 rather than Blizzard's 3, 1.5: dialled in live with /hui clock,
+    -- which is the only way to settle an optical offset against art whose
+    -- own HitRectInsets (8 left, 5 right) say the box is not symmetric.
+    clockTextX = 1,
+    clockTextY = -1,
 
     -- Minimap size, as Edit Mode's raw slider value: 5 is 100%, 6 is 110%,
     -- each step 10%. Applied through the layout.

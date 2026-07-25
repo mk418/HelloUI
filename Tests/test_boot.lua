@@ -505,6 +505,13 @@ local strayParent = Frame.new("SomeOtherFrame", _G.UIParent)
 local tracking = Frame.new("MiniMapTracking", strayParent)
 tracking:SetSize(33, 33)
 tracking:SetPoint("TOPLEFT", strayParent, "TOPLEFT", 11, -26)
+-- Blizzard's XML default: hidden, and only ever shown from
+-- MINIMAP_UPDATE_TRACKING - which does not fire for tracking that was already
+-- active at login.
+tracking:Hide()
+local trackingIcon = Frame.new("MiniMapTrackingIcon", tracking)
+trackingIcon.SetTexture = function(self, t) self._tex = t end
+_G.GetTrackingTexture = function() return 135725 end
 
 -- The clock, inside a minimap subtree scaled to 110% - which is what makes
 -- its text render soft, and what rounding the anchor alone cannot fix.
@@ -1018,6 +1025,19 @@ do
     eq(rp, "BOTTOM", "to LFG's bottom - directly underneath")
     ok(tx == 0 and ty < 0, "with a small gap, on the ring's edge")
 
+    -- The whole point: Blizzard leaves the frame hidden at login even with
+    -- tracking active, so positioning it correctly achieves nothing on its own.
+    eq(tracking:IsShown(), true, "and actually SHOWN, which Blizzard never does at login")
+    eq(trackingIcon._tex, 135725, "with the active tracking texture set")
+
+    -- No tracking active: mirror Blizzard and hide it again.
+    _G.GetTrackingTexture = function() return nil end
+    ns.Minimap:Apply()
+    eq(tracking:IsShown(), false, "hidden again when nothing is being tracked")
+    _G.GetTrackingTexture = function() return 135725 end
+    ns.Minimap:Apply()
+    eq(tracking:IsShown(), true, "and back when tracking resumes")
+
     -- The clock sits in a subtree scaled to 110%. Compensating its own scale
     -- brings the EFFECTIVE scale back to 1, so the digits render at native
     -- size on the pixel grid - which rounding the anchor alone could not do.
@@ -1027,8 +1047,8 @@ do
 
     -- And only now is rounding the half-pixel anchor meaningful.
     local _, _, _, cx, cy = clockText:GetPoint(1)
-    eq(cx, 3, "clock text keeps Blizzard's horizontal offset")
-    eq(cy, 2, "and its half-pixel y is rounded, now that it lands on the grid")
+    eq(cx, 1, "clock text at the offset dialled in live")
+    eq(cy, -1, "both whole pixels, and neither is Blizzard's guess")
 
     -- The offset is nudgeable, since the right optical value cannot be read
     -- off a screenshot.
@@ -1036,7 +1056,7 @@ do
     local _, _, _, nx, ny = clockText:GetPoint(1)
     eq(nx, 1, "clock x nudged")
     eq(ny, 0, "clock y nudged")
-    ns.Minimap:NudgeClock(3, 2)
+    ns.Minimap:NudgeClock(1, -1)
 
     -- Switching it off hands the scale back.
     ns.Config:Set("fixClockText", false)

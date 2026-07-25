@@ -106,6 +106,33 @@ local function trackingFrame()
     return _G["MiniMapTrackingFrame"] or _G["MiniMapTracking"]
 end
 
+-- Blizzard never shows this frame at login. MinimapTrackingSimpleMixin only
+-- reacts to MINIMAP_UPDATE_TRACKING, which fires when tracking CHANGES - so a
+-- character who logs in with tracking already active leaves the frame at its
+-- XML hidden="true" indefinitely. The probe made this unmistakable: correct
+-- parent, correct position under LFG, right icon, full alpha, shown=false.
+--
+-- This is the same three lines Blizzard's own handler runs, just also run
+-- once now. Their handler keeps working afterwards; this only supplies the
+-- initial state it never sets.
+local function syncTrackingVisibility(f)
+    local getTex = _G["GetTrackingTexture"]
+    if not getTex then return end
+
+    local ok, tex = pcall(getTex)
+    if not ok then return end
+
+    if tex then
+        local icon = _G["MiniMapTrackingIcon"]
+        if icon and icon.SetTexture then icon:SetTexture(tex) end
+        f:Show()
+        Minimap_.trackingShown = true
+    else
+        f:Hide()
+        Minimap_.trackingShown = false
+    end
+end
+
 local function applyTracking()
     if not Config:Enabled("fixTrackingIcon") then return end
 
@@ -126,6 +153,8 @@ local function applyTracking()
     -- than to fixed coordinates means it stays under it wherever that sits -
     -- and a hidden frame still reports its position, so this works even
     -- before either icon is shown.
+    syncTrackingVisibility(f)
+
     local lfg = _G["LFGMinimapFrame"]
     if lfg and lfg.GetPoint and lfg:GetPoint(1) then
         f:SetPoint("TOP", lfg, "BOTTOM", 0, -2)
@@ -232,6 +261,14 @@ function Minimap_:Init()
 
     -- The compensating scale depends on the minimap's, which changes with the
     -- UI scale and the resolution.
+    -- Keep in step with Blizzard's own handler when tracking changes.
+    ns:On("MINIMAP_UPDATE_TRACKING", function()
+        local f = trackingFrame()
+        if f and Config:Enabled("fixTrackingIcon") then
+            ns:SafeCall("Minimap:tracksync", syncTrackingVisibility, f)
+        end
+    end)
+
     ns:On("UI_SCALE_CHANGED", function() ns:SafeCall("Minimap:clockscale", applyClock) end)
     ns:On("DISPLAY_SIZE_CHANGED", function() ns:SafeCall("Minimap:clocksize", applyClock) end)
 
@@ -295,8 +332,9 @@ function Minimap_:Status()
         tostring(Minimap_.hookedToggle or false), tostring(Minimap_.hookedShow or false))
     ns:Print("  |cff808080position is Edit Mode's job; size is set in the layout|r")
     local track = trackingFrame()
-    ns:Print("  |cff808080tracking button: %s|r",
-        (not track) and "absent" or (Minimap_.trackingFixed and "moved onto the minimap" or "left alone"))
+    ns:Print("  |cff808080tracking button: %s, shown=%s|r",
+        (not track) and "absent" or (Minimap_.trackingFixed or "left alone"),
+        tostring(track and track.IsShown and track:IsShown()))
     ns:Print("  |cff808080clock text: %s|r",
         (not _G["TimeManagerClockTicker"]) and "clock not loaded" or (Minimap_.clockFixed or "left alone"))
 end
