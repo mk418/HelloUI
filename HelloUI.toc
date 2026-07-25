@@ -3,6 +3,7 @@
 ## Notes: De-clutter the stock Classic Era interface - no art overhaul, no replacement frames.
 ## Author: Drikk
 ## Version: 0.1.0
+## Category: UI Overhaul
 ## SavedVariables: HelloUIDB
 ## SavedVariablesPerCharacter: HelloUICharDB
 ## X-License: MIT
