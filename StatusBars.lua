@@ -129,14 +129,37 @@ local function setWidth(frame, width)
     frame:SetWidth(width or savedWidth[frame])
 end
 
+-- Derived from the real main action bar rather than a stored constant, and
+-- scale-aware. StatusTrackingManagerMixin:UpdateBarVisuals calls
+-- SetScale(self.ClassicScale) on the manager, so a width set in the
+-- container's own coordinate space does not render at that many screen
+-- pixels: 454 in a container scaled 1.4 draws 636 wide, which is what made
+-- the bar overshoot the stack on the right. Converting through effective
+-- scales makes it match whatever the bar actually measures, whatever either
+-- scale happens to be.
+local function wantedWidth(container)
+    local configured = Config:Get("statusBarWidth")
+    if not Config:Enabled("statusBarWidth") or configured == 0 then return nil end
+
+    local bar = _G["MainActionBar"]
+    if not (bar and bar.GetWidth and container.GetEffectiveScale) then return configured end
+
+    local barWidth = bar:GetWidth()
+    if not barWidth or barWidth <= 0 then return configured end
+
+    local barScale = (bar.GetEffectiveScale and bar:GetEffectiveScale()) or 1
+    local ownScale = container:GetEffectiveScale() or 1
+    if ownScale <= 0 then return configured end
+
+    return barWidth * barScale / ownScale
+end
+
 local function applyWidth()
     local list = containers()
     if not list then return end
 
-    local want = Config:Enabled("statusBarWidth") and Config:Get("statusBarWidth") or nil
-    if want == 0 then want = nil end
-
     for _, container in ipairs(list) do
+        local want = wantedWidth(container)
         setWidth(container, want)
         if container.bars then
             -- Keyed by StatusTrackingBarInfo.BarsEnum, so pairs not ipairs.

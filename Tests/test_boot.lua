@@ -400,6 +400,8 @@ local BARS = {
 
 for _, def in ipairs(BARS) do
     local bar = Frame.new(def[1], _G.UIParent)
+    -- Twelve buttons at a 38px pitch, less the trailing padding.
+    bar:SetSize(454, 36)
     for i = 1, def[3] do
         local btn = Frame.new(def[2] .. i, bar)
         btn.Name = btn:CreateFontString(def[2] .. i .. "Name")
@@ -625,6 +627,21 @@ do
         eq(bar.StatusBar:GetHeight(), 8, "height untouched - this is not a scale")
     end
     ok(ns.StatusBars.hookedVisuals, "UpdateBarVisuals hooked so Blizzard cannot undo it")
+
+    -- Scale awareness. UpdateBarVisuals calls SetScale on the manager, so a
+    -- width in the container's own coordinate space is not that many screen
+    -- pixels: at 1.4 a naive 454 draws 636 wide and overshoots the stack.
+    -- The width must convert through effective scales.
+    c.GetEffectiveScale = function() return 1.4 end
+    ns.StatusBars:Apply()
+    local want = 454 / 1.4
+    ok(math.abs(c:GetWidth() - want) < 0.5,
+        ("scaled container asks for %.1f, not a naive 454 (got %.1f)"):format(want, c:GetWidth()))
+    ok(math.abs(c:GetWidth() * 1.4 - 454) < 1,
+        "so it renders the same screen width as the stack")
+    c.GetEffectiveScale = function() return 1 end
+    ns.StatusBars:Apply()
+    eq(c:GetWidth(), 454, "and back to 454 at scale 1")
     -- Blizzard re-running its own pass must not widen them again.
     _G.StatusTrackingBarManager:UpdateBarVisuals()
     eq(c:GetWidth(), 454, "still narrow after Blizzard refreshes the bars")

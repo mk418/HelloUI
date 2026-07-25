@@ -606,6 +606,22 @@ function Layout:Probe()
     local h = UIParent and UIParent:GetHeight() or 0
     ns:Print("screen %dx%d |cff808080(left, bottom, width, height - rounded)|r", w, h)
 
+    -- The comparison that matters: does the status bar span the same screen
+    -- pixels as the main action bar? Reported in screen space, so any scale
+    -- difference between the two shows up rather than hiding in the numbers.
+    local function span(f)
+        if not (f and f.GetLeft and f:GetLeft()) then return nil end
+        local sc = (f.GetEffectiveScale and f:GetEffectiveScale()) or 1
+        return f:GetLeft() * sc, f:GetRight() * sc
+    end
+    local bl, br = span(_G["MainActionBar"])
+    local cs = _G["StatusTrackingBarManager"] and _G["StatusTrackingBarManager"].barContainers
+    local sl, sr = span(cs and cs[1])
+    if bl and sl then
+        ns:Print("  |cffffd100stack %d..%d   statusbar %d..%d  (overhang L %d, R %d)|r",
+            bl, br, sl, sr, bl - sl, sr - br)
+    end
+
     for _, def in ipairs(PROBE) do
         local f = _G[def[1]]
         if not f then

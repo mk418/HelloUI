@@ -135,6 +135,12 @@ DragonflightUI's layout was its default.
   `StatusBar` carries an explicit `<Size x="1024">` anchored only at `RIGHT`,
   and `InitializeBars` stamps that size in again at creation. Re-asserted after
   `UpdateBarVisuals`, hooked on the manager *instance*.
+
+  The width is **derived from `MainActionBar` at apply time, through effective
+  scales**, not stored as a constant. `UpdateBarVisuals` calls
+  `SetScale(self.ClassicScale)` on the manager, so a width set in the
+  container's own coordinate space is not that many screen pixels — 454 in a
+  container scaled 1.4 draws 636 and overshoots the stack on the right.
 - **Status bar text** — make the XP and reputation bar numbers permanently
   readable instead of mouseover-only. This is one setting, not the profile's
   two, and it is a single CVar write: Blizzard's own
