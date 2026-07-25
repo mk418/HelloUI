@@ -87,8 +87,19 @@ end
 -- the vanilla one lost it.
 --
 -- Only classes with an active tracking ability ever see it, which is why it
--- survives in the shipped client. The offsets are DragonflightUI's, which
--- put it where the tracking button has always sat on the ring.
+-- survives in the shipped client.
+--
+-- The position is Blizzard's own, not invented: the SAME frame name is
+-- declared in MinimapTracking_Dropdown.xml - the variant loaded on every
+-- non-vanilla flavour - as
+--   <Frame name="MiniMapTracking" parent="MinimapBackdrop">
+--       <Anchor point="TOPLEFT" x="5" y="-64"/>
+-- so that is where Blizzard puts it when the parent attribute has not gone
+-- missing. It also avoids a collision the naive fix walks straight into:
+-- LFGMinimapFrame sits at MinimapBackdrop TOPLEFT (25, -28), and the vanilla
+-- file's own TOPLEFT (11, -26) is 14px from it with 33px icons. Blizzard's
+-- dropdown position at y = -64 is a full row below, which is why it is the
+-- right answer rather than merely a different one.
 --------------------------------------------------------------------------
 
 local function trackingFrame()
@@ -101,18 +112,61 @@ local function applyTracking()
     local f = trackingFrame()
     local map = _G["Minimap"]
     if not (f and map and f.SetParent) then return end
+    -- Already parented somewhere sensible by the client or another addon:
+    -- leave it be rather than fighting over it.
+    if f.GetParent and f:GetParent() ~= nil and f:GetParent() ~= _G["UIParent"]
+       and not f.HelloUIReparented then
+        Minimap_.trackingFixed = "already parented"
+        return
+    end
     if f.HelloUIReparented then return end
 
-    f:SetParent(map)
+    local backdrop = _G["MinimapBackdrop"] or map
+    f:SetParent(backdrop)
     f:ClearAllPoints()
-    f:SetPoint("CENTER", map, "CENTER", -52.56, 53.51)
+    f:SetPoint("TOPLEFT", backdrop, "TOPLEFT", 5, -64)
     f.HelloUIReparented = true
     Minimap_.trackingFixed = true
+end
+
+--------------------------------------------------------------------------
+-- The clock
+--
+-- Blizzard anchors the ticker at a HALF PIXEL:
+--   <FontString name="TimeManagerClockTicker" inherits="WhiteNormalNumberFont">
+--       <Anchor point="CENTER" x="3" y="1.5"/>
+-- and a font string rendered off the pixel grid smears rather than landing
+-- cleanly, which is what reads as misaligned. The x=3 is deliberate - it
+-- centres the digits inside the dial art, which is not symmetric - so only
+-- the y is rounded, keeping Blizzard's intent and snapping to the grid.
+--
+-- Blizzard_TimeManager is LoadOnDemand, so the frame may not exist yet; it is
+-- re-applied if the addon loads later.
+--------------------------------------------------------------------------
+
+local function applyClock()
+    if not Config:Enabled("fixClockText") then return end
+
+    local ticker = _G["TimeManagerClockTicker"]
+    local button = _G["TimeManagerClockButton"]
+    if not (ticker and button and ticker.SetPoint) then return end
+
+    local point, rel, relPoint, x, y = ticker:GetPoint(1)
+    if not point then return end
+    if y == math.floor(y) then
+        Minimap_.clockFixed = "already whole-pixel"
+        return
+    end
+
+    ticker:ClearAllPoints()
+    ticker:SetPoint(point, rel or button, relPoint, x, math.floor(y + 0.5))
+    Minimap_.clockFixed = "rounded"
 end
 
 function Minimap_:Apply()
     applyTimeOfDay()
     applyTracking()
+    applyClock()
 end
 
 function Minimap_:Init()
@@ -131,6 +185,13 @@ function Minimap_:Init()
     -- Catch anything else that shows it, including other addons. hooksecurefunc
     -- runs after the original, and Hide is not itself hooked, so this cannot
     -- recurse. Same idiom the working fork uses on its own minimap globals.
+    -- The clock addon is LoadOnDemand and may arrive after us.
+    ns:On("ADDON_LOADED", function(name)
+        if name == "Blizzard_TimeManager" then
+            ns:SafeCall("Minimap:clock", applyClock)
+        end
+    end)
+
     local f = todFrame()
     if f then
         hooksecurefunc(f, "Show", function(self)
@@ -158,4 +219,6 @@ function Minimap_:Status()
     local track = trackingFrame()
     ns:Print("  |cff808080tracking button: %s|r",
         (not track) and "absent" or (Minimap_.trackingFixed and "moved onto the minimap" or "left alone"))
+    ns:Print("  |cff808080clock text: %s|r",
+        (not _G["TimeManagerClockTicker"]) and "clock not loaded" or (Minimap_.clockFixed or "left alone"))
 end

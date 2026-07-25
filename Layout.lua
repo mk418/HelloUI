@@ -132,10 +132,10 @@ local CASTBAR_Y = 245  -- DragonflightUI's own default, above the bars
 -- stack. Width is set directly instead; see StatusBars.lua.
 local STATUS_SIZE = 10
 
--- Minimap size. The slider is 50..200 in steps of 10 stored pre-conversion, so
--- raw 5 is 100% and raw 6 is 110% - slightly bigger, as asked, without
--- crowding the corner.
-local MINIMAP_SIZE = 6
+-- Minimap size comes from the config so it can be dropped back to 100% - the
+-- slider is 50..200 in steps of 10 stored pre-conversion, so raw 5 is 100%
+-- and 6 is 110%. Worth knowing that any non-integer scale puts the whole
+-- minimap subtree on fractional pixels, which softens text drawn there.
 
 -- Chat. Bar 5 occupies the bottom-left once it is switched on, which is
 -- exactly where Blizzard parks the chat frame, so the two overlap. Lifting
@@ -228,7 +228,7 @@ local function geometry()
     -- The minimap, a little larger.
     local MAP = Enum.EditModeSystem.Minimap
     if MAP and Enum.EditModeMinimapSetting then
-        g[#g + 1] = { system = MAP, index = nil, minimapSize = MINIMAP_SIZE,
+        g[#g + 1] = { system = MAP, index = nil, minimapSize = Config:Get("minimapSize") or 6,
             point = "TOPRIGHT", relativeTo = "UIParent", relativePoint = "TOPRIGHT", x = 0, y = 0 }
     end
 

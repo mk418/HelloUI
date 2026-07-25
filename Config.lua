@@ -107,6 +107,17 @@ local accountDefaults = {
     -- stranded in the corner of the screen next to the player frame.
     fixTrackingIcon = true,
 
+    -- Blizzard anchors the clock's text at a half-pixel vertical offset, which
+    -- makes it render smeared. Rounds it to the pixel grid. See Minimap.lua.
+    fixClockText = true,
+
+    -- Minimap size, as Edit Mode's raw slider value: 5 is 100%, 6 is 110%,
+    -- each step 10%. Applied through the layout. Note that a non-integer
+    -- scale puts everything in the minimap subtree - including the clock
+    -- digits - on fractional pixels, so if text there looks soft, 5 is the
+    -- value that does not.
+    minimapSize = 6,
+
     -- No chat settings. The old profile pinned ChatFrame1 to 460x207 at
     -- 42,35, but on 1.15.9 ChatFrame1 inherits EditModeChatFrameSystemTemplate
     -- and Edit Mode owns its anchor AND its width and height. Same reasoning

@@ -48,7 +48,7 @@ local NOOP_METHODS = {
     "RegisterForClicks", "RegisterForDrag", "SetMovable", "SetClampedToScreen",
     "SetUserPlaced", "SetToplevel", "SetScale", "SetFont", "GetFont",
     "SetNormalTexture", "SetHighlightTexture", "SetPushedTexture",
-    "SetAttribute", "SetID", "GetID", "Raise", "Lower", "SetParent",
+    "SetAttribute", "SetID", "GetID", "Raise", "Lower",
     "SetHitRectInsets", "SetIgnoreParentAlpha", "SetPropagateMouseClicks",
 }
 for _, name in ipairs(NOOP_METHODS) do
@@ -96,9 +96,12 @@ function Frame:IsMouseEnabled() return self._mouse end
 local unpackf = rawget(table, "unpack") or unpack
 function Frame:GetChildren() return unpackf(self._children or {}) end
 function Frame:SetSize(w, h) self._w, self._h = w, h end
--- Real, not no-ops: the status bar width feature reads these back.
+-- Real, not no-ops: the status bar width and tracking-icon features read
+-- these back. Anything stubbed here can let a feature "pass" while doing
+-- nothing at all, which has happened twice.
 function Frame:SetWidth(w) self._w = w end
 function Frame:SetHeight(h) self._h = h end
+function Frame:SetParent(p) self._parent = p end
 function Frame:GetWidth() return self._w end
 function Frame:GetHeight() return self._h end
 function Frame:GetEffectiveScale() return 1 end
@@ -479,6 +482,22 @@ for _, b in ipairs({ zoomIn, zoomOut }) do
     b.GetDisabledTexture = function() return d end
 end
 Frame.new("GameTimeFrame", cluster)
+
+-- MinimapBackdrop and its occupants, as the client has them. MiniMapTracking
+-- is declared with NO parent in the vanilla file - that is the bug - and
+-- LFGMinimapFrame sits at TOPLEFT (25,-28), which the naive fix collides with.
+local backdrop = Frame.new("MinimapBackdrop", minimap)
+local lfg = Frame.new("LFGMinimapFrame", backdrop)
+lfg:SetSize(33, 33)
+lfg:SetPoint("TOPLEFT", backdrop, "TOPLEFT", 25, -28)
+local tracking = Frame.new("MiniMapTracking", nil)
+tracking:SetSize(33, 33)
+tracking:SetPoint("TOPLEFT", nil, "TOPLEFT", 11, -26)
+
+-- The clock. Blizzard anchors its ticker at a half-pixel y.
+local clockBtn = Frame.new("TimeManagerClockButton", backdrop)
+local clockText = Frame.new("TimeManagerClockTicker", clockBtn)
+clockText:SetPoint("CENTER", clockBtn, "CENTER", 3, 1.5)
 
 -- Action bar art + cast bars
 local mainMenuBar = Frame.new("MainMenuBar", _G.UIParent)
@@ -970,6 +989,29 @@ eq(_G.MainActionBar.EndCaps:IsShown(), false, "gryphon end caps hidden")
 _G.MainActionBar:UpdateEndCaps(false)
 eq(mainMenuBar:IsShown(), false, "still hidden after Blizzard recomputes end caps")
 ok(ns.Bars.hookedEndCaps, "UpdateEndCaps hooked on the instance")
+
+print("\nminimap fixes")
+do
+    -- Blizzard leaves MiniMapTracking parentless, so it strands itself in the
+    -- screen corner. It must end up on the minimap backdrop.
+    eq(tracking:GetParent(), backdrop, "tracking button reparented onto the backdrop")
+    local p, _, rp, tx, ty = tracking:GetPoint(1)
+    eq(p, "TOPLEFT", "anchored TOPLEFT")
+    eq(rp, "TOPLEFT", "to the backdrop's TOPLEFT")
+    -- Blizzard's own position from MinimapTracking_Dropdown.xml, chosen
+    -- because the vanilla file's (11,-26) collides with LFG at (25,-28).
+    eq(tx, 5, "at Blizzard's own x")
+    eq(ty, -64, "and y - a full row below the LFG icon")
+    local _, _, _, lx, ly = lfg:GetPoint(1)
+    ok(math.abs(ty - ly) >= 33, "clear of the LFG icon by at least an icon height")
+    ok(lx ~= nil, "LFG icon still where Blizzard put it")
+
+    -- The clock ticker's half-pixel y is what makes its text render smeared.
+    local _, _, _, cx, cy = clockText:GetPoint(1)
+    eq(cx, 3, "clock text keeps Blizzard's horizontal offset")
+    eq(cy, 2, "but its half-pixel y is rounded to the grid")
+    eq(cy, math.floor(cy), "so the text lands on whole pixels")
+end
 
 print("\nchat")
 -- ChatFrame1 inherits EditModeChatFrameSystemTemplate on 1.15.9, so the addon
