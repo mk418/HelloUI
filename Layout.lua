@@ -172,6 +172,7 @@ local function geometry()
     -- the button rows. Pinned under the stack instead. Which container shows
     -- XP and which shows reputation is priority-driven and not ours to pick;
     -- these are just the two slots.
+    Layout.statusEnumMissing = not (STATUS and SI)
     if STATUS and SI then
         g[#g + 1] = { system = STATUS, index = SI.StatusTrackingBar1,
             point = "BOTTOM", relativeTo = "UIParent", relativePoint = "BOTTOM", x = 0, y = STATUS_Y }
@@ -247,9 +248,13 @@ function Layout:Build()
     local S = Enum.EditModeActionBarSetting
     local barSystem = Enum.EditModeSystem.ActionBar
 
-    local touched = 0
+    local touched, missing = 0, {}
+    Layout.report = {}
     for _, def in ipairs(geo) do
         local entry = findSystem(systems, def.system, def.index)
+        if not entry then
+            missing[#missing + 1] = tostring(def.system) .. "/" .. tostring(def.index)
+        end
         if entry then
             entry.anchorInfo = {
                 point = def.point,
@@ -275,6 +280,7 @@ function Layout:Build()
         end
     end
 
+    Layout.report = { touched = touched, missing = missing, wanted = #geo }
     if touched == 0 then return nil, "found no bar systems to position" end
     return systems, touched
 end
@@ -538,6 +544,14 @@ function Layout:Status()
     ns:Print("layout: %s%s",
         index and ("|cffffd100" .. name .. "|r exists at slot " .. index) or ("|cffffd100" .. name .. "|r not created"),
         (index and info.activeLayout == index) and " |cff808080(active)|r" or "")
+    if Layout.statusEnumMissing then
+        ns:Print("  |cffff8080the XP/reputation bar systems are not exposed on this client|r")
+    end
+    if Layout.report then
+        local r = Layout.report
+        ns:Print("  |cff808080positioned %d of %d systems%s|r", r.touched or 0, r.wanted or 0,
+            (#(r.missing or {}) > 0) and (" - not found: " .. table.concat(r.missing, " ")) or "")
+    end
     ns:Print("  |cff808080mode: %s%s, prompt at login: %s|r",
         perCharacter() and "per character" or "account-wide",
         Config:HasChar("layoutPerCharacter") and " (character override)" or "",
