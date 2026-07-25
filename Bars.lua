@@ -152,16 +152,21 @@ end
 --------------------------------------------------------------------------
 -- The native proxies
 --
--- Only ever written to turn a bar OFF, and only after remembering what the
--- player had. The earlier version wrote `not wantOff` for every bar, which
--- meant any bar the player had switched off in Blizzard's own Action Bars
--- options got switched back on at the next login - HelloUI silently
--- overwriting a setting it does not own, in a module whose whole argument is
--- that Blizzard's setting is the right mechanism.
+-- `barsOff` is the authoritative statement of which bars are shown: anything
+-- in it is hidden, anything not in it is shown. That is a deliberate reversal
+-- of an earlier, more timid version which would only ever turn a bar OFF, on
+-- the grounds that Blizzard's own setting was not ours to overwrite.
 --
--- The remembered value lives in saved variables rather than a file-local,
--- because a /reload between hiding and un-hiding would otherwise lose it and
--- restore a guess.
+-- The reversal is the point of the feature now. Reproducing DragonflightUI's
+-- base action bar UI means deciding which bars are up, and a rule that can
+-- only ever hide cannot do that - it left bar 5 dark forever because the
+-- player's stored Blizzard setting happened to have it off.
+--
+-- What made the old behaviour a bug was that it was silent and unasked-for.
+-- What makes this acceptable: it is the documented job of the feature, every
+-- bar is individually switchable, the pre-existing value is remembered so
+-- `/hui off` puts it back, and that memory lives in saved variables rather
+-- than a file-local so a /reload between hiding and restoring cannot lose it.
 --------------------------------------------------------------------------
 
 local function proxyStore()
@@ -177,20 +182,20 @@ local function getProxy(def)
     return current
 end
 
-local function setProxy(def, wantOff)
+local function setProxy(def, wantOff, enabled)
     if not (Settings and Settings.SetValue) then return end
 
     local store = proxyStore()
     local current = getProxy(def)
     if current == nil then return end
 
-    if wantOff then
+    if enabled then
+        -- Remember what the player had, once, before we first change it.
         if store[def.id] == nil then store[def.id] = current end
-        if current ~= false then pcall(Settings.SetValue, def.proxy, false) end
+        local want = not wantOff
+        if current ~= want then pcall(Settings.SetValue, def.proxy, want) end
     else
-        -- Restore only what we changed. A bar we never hid is none of our
-        -- business, and store[def.id] == false means the player already had it
-        -- off before we arrived, so it stays off.
+        -- Addon switched off: hand every bar back to whatever it was.
         local original = store[def.id]
         store[def.id] = nil
         if original ~= nil and current ~= original then
@@ -287,7 +292,7 @@ function Bars:Apply()
 
         ns:WhenSafe("Bars:" .. def.id, function()
             if def.proxy then
-                setProxy(def, wantOff)
+                setProxy(def, wantOff, enabled)
             else
                 suppress(def, wantOff)
             end

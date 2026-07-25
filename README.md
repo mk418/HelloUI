@@ -15,10 +15,12 @@ text permanently readable. See `DESIGN.md` for the evidence and the reasoning.
 - **Hides keybind and macro text** on every action button — bars 1–8, stance and
   pet. There is no Blizzard setting for this; it is the one feature here that is
   genuinely unavailable natively.
-- **Switches whole bars off.** Bars 2–8 through Blizzard's own per-bar setting;
-  bar 1, stance and pet by making them invisible and non-interactive, because
-  Blizzard offers no toggle for those three and hiding bar 1's frame would drag
-  bars 2–8 down with it.
+- **Owns which bars are up.** The default is DragonflightUI's base set — bars
+  1–5 shown, 6–8 hidden, stance and pet shown. Bars 2–8 go through Blizzard's
+  own per-bar setting; bar 1, stance and pet are made invisible and
+  non-interactive instead, because Blizzard offers no toggle for those three and
+  hiding bar 1's *frame* would drag bars 2–8 down with it. Whatever your bars
+  were set to before is remembered, and `/hui off` hands it back.
 - **Hides the gryphons and the main bar backdrop** — the same two frames
   Blizzard's Edit Mode "Hide Bar Art" drives. The latency strip goes with them,
   as it does under Blizzard's own setting; the micro menu and bags stay.

@@ -87,6 +87,17 @@ DragonflightUI's layout was its default.
   never hide Blizzard's bars themselves, so somebody has to, and this is the
   addon whose job it is. See *Sibling addon boundaries*.
 
+  `barsOff` is **authoritative**: anything in it is hidden, anything not in it
+  is shown. That reverses an earlier, more timid rule which would only ever
+  turn a bar *off*, on the grounds that Blizzard's setting was not ours to
+  overwrite. Reproducing DragonflightUI's base UI means deciding which bars are
+  up, and a rule that can only hide cannot do that — it left bar 5 dark forever
+  because the player's stored Blizzard setting happened to have it off. What
+  made the old behaviour a bug was that it was silent and unasked-for; what
+  makes this acceptable is that it is the documented job of the feature, every
+  bar is individually switchable, and the pre-existing value is remembered in
+  saved variables so `/hui off` hands it straight back.
+
   Two mechanisms, because Blizzard only supplies one. Bars 2–8 have a native
   settings proxy (`PROXY_SHOW_ACTIONBAR_2`…`_8`) and driving it is exactly what
   Blizzard's own checkbox does. Bar 1, the stance bar and the pet bar have no
@@ -314,7 +325,7 @@ The full deviation set, both accounts. Read straight out of
 | Setting | Value | Becomes |
 | --- | --- | --- |
 | `bar1`–`bar8`, `stance`: `hideKeybind`, `hideMacro` | `true` | Buttons.lua |
-| `bar4.activate` | `false` | Bars.lua |
+| `bar4.activate` | `false` | superseded — the default is DragonflightUI's base set (1–5 on, 6–8 off) rather than this profile's deviations |
 | `xp.alwaysShowXP`, `rep.alwaysShowRep` | `true` | StatusBars.lua |
 | `player.classcolor` | `true` | Player.lua |
 | `minimap.hideCalendar` | `true` | Minimap.lua |

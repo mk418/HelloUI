@@ -561,9 +561,12 @@ eq(_G.StanceButton1:GetNormalTexture()._alpha, 1, "including the stance bar")
 ----------------------------------------------------------------------
 
 print("\nbars")
-eq(settingValues["PROXY_SHOW_ACTIONBAR_5"], false, "bar5 (MultiBarLeft) switched off natively")
-eq(settingValues["PROXY_SHOW_ACTIONBAR_4"], true, "bar4 (MultiBarRight) left alone")
-eq(settingValues["PROXY_SHOW_ACTIONBAR_2"], true, "bar2 left alone")
+-- DragonflightUI's base set: 1-5 up, 6-8 down.
+eq(settingValues["PROXY_SHOW_ACTIONBAR_2"], true, "bar2 shown")
+eq(settingValues["PROXY_SHOW_ACTIONBAR_4"], true, "bar4 shown")
+eq(settingValues["PROXY_SHOW_ACTIONBAR_5"], true, "bar5 shown - part of the base UI")
+eq(settingValues["PROXY_SHOW_ACTIONBAR_6"], false, "bar6 hidden")
+eq(settingValues["PROXY_SHOW_ACTIONBAR_8"], false, "bar8 hidden")
 eq(_G.MainActionBar._alpha, 1, "bar1 untouched by default")
 -- Hiding bar1 must never Hide() the frame: IsNormalActionBarState() reads
 -- MainActionBar:IsShown() and would drag bars 2-8 down with it.
@@ -838,26 +841,26 @@ ok(hooks["ToggleMinimap"], "ToggleMinimap hooked (re-hides the dial after a togg
 ok(hooks["FriendsFrame_UpdateFriendButton"], "friends list update hooked")
 ok(hooks["Show"], "GameTimeFrame:Show hooked (catches other addons showing it)")
 
--- A bar the player switched off in Blizzard's own options must not be
--- switched back on by us. The first version wrote `not wantOff` for every
--- proxy bar, so any bar the player had hidden natively came back at login.
+-- barsOff is authoritative now: a bar absent from it is shown, even if the
+-- player's own Blizzard setting had it hidden. That reversal is only
+-- acceptable because the original is remembered and handed back, so this is
+-- the test that matters.
 settingValues["PROXY_SHOW_ACTIONBAR_3"] = false
+HelloUIDB.proxyOriginals = {}
+ns:ApplyAll()
+eq(settingValues["PROXY_SHOW_ACTIONBAR_3"], true,
+    "barsOff is authoritative - an absent bar is shown")
+eq(HelloUIDB.proxyOriginals.bar3, false, "and the player's original value is remembered")
+
+-- ...and switching the addon off hands it straight back.
+ns.Config:Set("enabled", false)
 ns:ApplyAll()
 eq(settingValues["PROXY_SHOW_ACTIONBAR_3"], false,
-    "a bar the player turned off natively is left off")
+    "/hui off restores the player's own bar visibility")
+ns.Config:Set("enabled", true)
+ns:ApplyAll()
+eq(settingValues["PROXY_SHOW_ACTIONBAR_3"], true, "and re-enabling re-applies")
 settingValues["PROXY_SHOW_ACTIONBAR_3"] = true
-
--- Hiding then un-hiding a proxy bar restores what the player had, and a bar
--- they had already hidden themselves stays hidden.
-settingValues["PROXY_SHOW_ACTIONBAR_6"] = false
-ns.Config:SetChar("barsOff", { bar6 = true })
-ns:ApplyAll()
-eq(settingValues["PROXY_SHOW_ACTIONBAR_6"], false, "hiding an already-off bar is a no-op")
-ns.Config:ClearChar("barsOff")
-ns:ApplyAll()
-eq(settingValues["PROXY_SHOW_ACTIONBAR_6"], false,
-    "un-hiding restores the player's own value, not a guess")
-settingValues["PROXY_SHOW_ACTIONBAR_6"] = true
 
 -- Unticking a nested checkbox must store false, not delete the key: Config's
 -- applyDefaults recurses into these tables and would resurrect the default on

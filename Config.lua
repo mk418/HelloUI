@@ -33,18 +33,19 @@ local accountDefaults = {
     -- all. Full alpha, using Blizzard's own texture. See Buttons.lua.
     buttonBorders = true,
 
-    -- Bars.lua. One bar was switched off on every character - and mind the
-    -- numbering. The old profile called it "bar4", but DragonflightUI bound
-    -- its bar4 to MultiBarLeft, which the game itself calls bar 5
-    -- (PROXY_SHOW_ACTIONBAR_5). These ids follow Blizzard's numbering,
-    -- because that is what the labels in the game's own Action Bars options
-    -- say, so the same physical bar is bar5 here. See Bars.lua.
+    -- Bars.lua. DragonflightUI's own base action bar set: bars 1-5 shown,
+    -- 6-8 off (its defaults have activate=false for those three), stance and
+    -- pet shown. This replaces the earlier profile-derived default, which had
+    -- bar 5 off because that is what the old saved profile happened to say -
+    -- the base UI is the better baseline, and bar 5 is part of it.
     --
-    -- The stance and pet entries exist because a character running one of the
-    -- class addons wants them off too, but that is a per-character call
-    -- rather than an account-wide one - see the char override machinery below.
+    -- Mind the numbering: these ids are Blizzard's, matching the labels in the
+    -- game's own Action Bars options. DragonflightUI's bar4/bar5 are the other
+    -- way round. See Bars.lua.
     barsOff = {
-        bar5 = true,
+        bar6 = true,
+        bar7 = true,
+        bar8 = true,
     },
 
     -- StatusBars.lua. "Always show" means the bar text is permanently
