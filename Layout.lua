@@ -113,9 +113,17 @@ end
 -- used - and a gap that is slightly too big reads as a choice, where one
 -- pixel too small reads as a bug. Nudge any of it in Edit Mode afterwards;
 -- that is the point of writing a layout rather than enforcing one.
-local ROW_STEP = 48    -- vertical pitch of the stacked bars
-local BASE_Y = 24      -- bottom row's height above the screen edge
-local FLANK_X = 400    -- how far the 4x3 blocks sit from centre
+-- ActionButtonTemplate is 36x36, so 100% icon size is a 36px button - not the
+-- 45 first assumed, which is where a 12px gap between the rows came from.
+-- Padding is 2, giving a 38px pitch between buttons horizontally, so the rows
+-- use the same 38: the three bars then read as one continuous grid rather
+-- than three bars with air between them.
+local BUTTON = 36
+local ROW_STEP = BUTTON + 2   -- 38: same pitch as the gap between buttons
+local BASE_Y = 24             -- bottom row's height above the screen edge
+-- Half the twelve-wide stack (227) plus half a four-wide block (75) plus a
+-- 20px gap.
+local FLANK_X = 322
 local STATUS_Y = 4     -- the XP/reputation bars, under the stack
 
 -- Geometry is measured off DragonflightUI's own default screenshot: three
@@ -124,12 +132,8 @@ local STATUS_Y = 4     -- the XP/reputation bars, under the stack
 -- directly beneath it rather than wherever Blizzard's manager leaves them.
 --
 -- Buttons are at 100%, not the 80% first tried. DragonflightUI's own
--- buttonScale is 0.8, but that scales ITS buttons, and matching the number
--- rather than the result made these read as small. ROW_STEP is then the
--- button size plus a hair - 45 + 3 - which is both bigger buttons and less
--- air between the rows. FLANK_X is derived rather than eyeballed: half the
--- twelve-button stack (6 x 47 = 282) plus half a four-button block (94) plus
--- a ~24px gap.
+-- buttonScale is 0.8, but that scales ITS buttons; against a 36px template
+-- 80% is a 29px icon, which is why they read as small.
 local function geometry()
     local I = indices()
     if not I then return nil end
@@ -148,7 +152,12 @@ local function geometry()
         { system = BAR, index = I.Bar3, rows = 1,
           point = "BOTTOM", relativeTo = "UIParent", relativePoint = "BOTTOM", x = 0, y = BASE_Y + ROW_STEP * 2 },
 
-        -- MultiBarRight: the right-hand 4x3 block.
+        -- MultiBarRight: the right-hand 4x3 block. Orientation matters here
+        -- and is easy to miss - Blizzard's preset has both side bars as
+        -- Vertical, and on a vertical bar NumRows counts COLUMNS, so rows=3
+        -- produces a 3-wide, 4-tall block instead of the 4x3 one wanted.
+        -- Every positioned bar therefore states its orientation explicitly
+        -- rather than inheriting whatever the preset had.
         { system = BAR, index = I.RightBar1, rows = 3,
           point = "BOTTOM", relativeTo = "UIParent", relativePoint = "BOTTOM", x = FLANK_X, y = BASE_Y },
 
@@ -290,6 +299,8 @@ function Layout:Build()
             -- status tracking bars carry a different setting enum entirely
             -- and only want repositioning.
             if def.system == barSystem then
+                setSetting(entry, S.Orientation,
+                    (Enum.ActionBarOrientation and Enum.ActionBarOrientation.Horizontal) or 0)
                 setSetting(entry, S.NumRows, def.rows)
                 setSetting(entry, S.IconSize, ICON_SIZE)
                 setSetting(entry, S.IconPadding, ICON_PADDING)

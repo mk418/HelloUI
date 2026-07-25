@@ -692,7 +692,29 @@ do
     for i = 2, #ys do
         if ys[i] ~= ys[i - 1] then minGap = math.min(minGap, ys[i] - ys[i - 1]) end
     end
-    ok(minGap >= 40, ("stacked bars clear a 36px icon (smallest gap %s)"):format(tostring(minGap)))
+    -- Snug, not spaced: the pitch must clear a 36px button so the rows never
+    -- overlap, and must not exceed button+padding or a visible gap opens up
+    -- and the three bars stop reading as one grid.
+    ok(minGap >= 36, ("rows never overlap a 36px button (gap %s)"):format(tostring(minGap)))
+    ok(minGap <= 38, ("rows are snug, not spaced (gap %s)"):format(tostring(minGap)))
+
+    -- The side blocks must be 4 wide x 3 tall. Blizzard's preset has both
+    -- side bars Vertical, where NumRows counts COLUMNS and rows=3 yields a
+    -- 3x4 block instead - so orientation has to be stated, not inherited.
+    local sideChecked = 0
+    for _, e in ipairs(sys) do
+        if e.system == 1 and (e.systemIndex == 4 or e.systemIndex == 5) then
+            local orient, sideRows
+            for _, st in ipairs(e.settings) do
+                if st.setting == 0 then orient = st.value end
+                if st.setting == 1 then sideRows = st.value end
+            end
+            eq(orient, 0, "side bar forced Horizontal, not the preset's Vertical")
+            eq(sideRows, 3, "3 rows of 4, not 3 columns of 4")
+            sideChecked = sideChecked + 1
+        end
+    end
+    eq(sideChecked, 2, "both side blocks checked")
 end
 
 -- Re-applying refreshes rather than duplicating, and stays active.
