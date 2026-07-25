@@ -43,8 +43,7 @@ local Frame = {}
 -- `if frame.SomeField then` true for fields that do not exist - and that
 -- pattern is load-bearing throughout the addon.
 local NOOP_METHODS = {
-    "SetFrameStrata", "SetFrameLevel", "SetJustifyH", "SetJustifyV", "SetWidth",
-    "SetHeight", "SetSpacing", "SetMinMaxValues", "SetValueStep", "SetValue",
+    "SetFrameStrata", "SetFrameLevel", "SetJustifyH", "SetJustifyV", "SetSpacing", "SetMinMaxValues", "SetValueStep", "SetValue",
     "SetObeyStepOnDrag", "SetOwner", "AddLine", "SetTexCoord", "SetDrawLayer",
     "RegisterForClicks", "RegisterForDrag", "SetMovable", "SetClampedToScreen",
     "SetUserPlaced", "SetToplevel", "SetScale", "SetFont", "GetFont",
@@ -97,6 +96,9 @@ function Frame:IsMouseEnabled() return self._mouse end
 local unpackf = rawget(table, "unpack") or unpack
 function Frame:GetChildren() return unpackf(self._children or {}) end
 function Frame:SetSize(w, h) self._w, self._h = w, h end
+-- Real, not no-ops: the status bar width feature reads these back.
+function Frame:SetWidth(w) self._w = w end
+function Frame:SetHeight(h) self._h = h end
 function Frame:GetWidth() return self._w end
 function Frame:GetHeight() return self._h end
 function Frame:GetEffectiveScale() return 1 end
@@ -419,6 +421,23 @@ _G.ActionBarActionButtonMixin = { UpdateHotkeys = function() end }
 -- Status tracking
 _G.StatusTrackingBarManager = Frame.new("StatusTrackingBarManager")
 _G.StatusTrackingBarManager.UpdateBarTextVisibility = function() _G._barTextRefreshed = true end
+-- Container plus its two inner bars, shaped like the real thing: the inner
+-- StatusBar carries its own explicit width and does NOT follow its parent.
+do
+    local container = Frame.new(nil, _G.StatusTrackingBarManager)
+    container:SetSize(1024, 13)
+    container.bars = {}
+    for _, idx in ipairs({ 1, 4 }) do
+        local bar = Frame.new(nil, container)
+        bar:SetSize(1024, 13)
+        bar.StatusBar = Frame.new(nil, bar)
+        bar.StatusBar:SetSize(1024, 8)
+        container.bars[idx] = bar
+    end
+    _G.StatusTrackingBarManager.barContainers = { container }
+    _G.StatusTrackingBarManager.UpdateBarVisuals = function() end
+    _G._statusContainer = container
+end
 
 -- Player frame
 local playerFrame = Frame.new("PlayerFrame", _G.UIParent)
@@ -594,6 +613,23 @@ eq(_G.ActionButton1._mouse, true, "bar1 buttons interactive again")
 print("\nstatus bars")
 eq(cvars.xpBarText, "1", "xpBarText set")
 
+print("\nstatus bar width")
+do
+    local c = _G._statusContainer
+    eq(c:GetWidth(), 454, "container narrowed to the action bar stack width")
+    for _, bar in pairs(c.bars) do
+        eq(bar:GetWidth(), 454, "inner bar narrowed")
+        -- The inner StatusBar has its own explicit width and is anchored only
+        -- at RIGHT, so it does not follow the parent and must be set too.
+        eq(bar.StatusBar:GetWidth(), 454, "inner StatusBar narrowed")
+        eq(bar.StatusBar:GetHeight(), 8, "height untouched - this is not a scale")
+    end
+    ok(ns.StatusBars.hookedVisuals, "UpdateBarVisuals hooked so Blizzard cannot undo it")
+    -- Blizzard re-running its own pass must not widen them again.
+    _G.StatusTrackingBarManager:UpdateBarVisuals()
+    eq(c:GetWidth(), 454, "still narrow after Blizzard refreshes the bars")
+end
+
 print("\nplayer")
 eq(healthBar.lockColor, true, "lockColor set so Blizzard stops resetting the colour")
 local r, g, b = healthBar:GetStatusBarColor()
@@ -681,16 +717,16 @@ do
     end
     eq(statusBars, 2, "both status tracking slots positioned")
 
-    -- The status bars ship 1024 wide; Size is a SCALE, and raw 0 is the
-    -- slider's floor of 50% - the narrowest Edit Mode allows, 512 against the
-    -- 454 stack.
+    -- Size stays at 100%: it is a SCALE, so using it to narrow the bar
+    -- squashed the height too. Width is set directly instead - see the
+    -- status bar width regression below.
     for _, e in ipairs(sys) do
         if e.system == 4 then
             local statusSize
             for _, st in ipairs(e.settings) do
                 if st.setting == 0 then statusSize = st.value end
             end
-            eq(statusSize, 0, "status bar narrowed to the slider's 50% floor")
+            eq(statusSize, 10, "status bar left at 100% scale, so full height")
         end
     end
 
@@ -864,6 +900,7 @@ eq(healthBar.lockColor, nil, "lockColor handed back to Blizzard when disabled")
 eq(_G.GameTimeFrame:IsShown(), true, "time-of-day dial shown again when disabled")
 eq(_G.PlayerFrameTexture._desat, false, "darkmode restored when disabled")
 eq(_G.ActionButton1:GetNormalTexture()._alpha, 0.5, "button border back to Blizzard's 0.5")
+eq(_G._statusContainer:GetWidth(), 1024, "status bar width restored when disabled")
 eq(mainMenuBar:IsShown(), true, "bar art restored when disabled")
 eq(chat:GetWidth(), 400, "chat still untouched")
 

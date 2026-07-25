@@ -94,6 +94,77 @@ function StatusBars:Apply()
     end
 end
 
+
+--------------------------------------------------------------------------
+-- Width
+--
+-- Edit Mode has no width control for these bars. Its "Size" setting is a
+-- scale - SetScale(value / 100) - so narrowing the bar with it squashes the
+-- height too, and it floors at 50%, which on a 1024px container is still
+-- wider than the 454px action bar stack. Both were wrong in different
+-- directions, which is why the width is set directly here.
+--
+-- Three frames per container, because they do not follow each other:
+-- StatusTrackingBarTemplate's inner StatusBar carries an explicit
+-- <Size x="1024"> and is anchored only at RIGHT, so it does not track its
+-- parent's width, and StatusTrackingBarContainerMixin:InitializeBars stamps
+-- that size in again at creation from the container's width.
+--
+-- Re-asserted after UpdateBarVisuals, which Blizzard calls on anchor changes
+-- and from UIParent_ManageFramePositions. The hook goes on the manager
+-- INSTANCE, not StatusTrackingManagerMixin - Mixin() copies functions onto
+-- the frame at creation, so hooking the mixin table reaches nothing.
+--------------------------------------------------------------------------
+
+local savedWidth = {}
+
+local function containers()
+    local mgr = _G["StatusTrackingBarManager"]
+    return mgr and mgr.barContainers
+end
+
+local function setWidth(frame, width)
+    if not (frame and frame.SetWidth and frame.GetWidth) then return end
+    if savedWidth[frame] == nil then savedWidth[frame] = frame:GetWidth() end
+    frame:SetWidth(width or savedWidth[frame])
+end
+
+local function applyWidth()
+    local list = containers()
+    if not list then return end
+
+    local want = Config:Enabled("statusBarWidth") and Config:Get("statusBarWidth") or nil
+    if want == 0 then want = nil end
+
+    for _, container in ipairs(list) do
+        setWidth(container, want)
+        if container.bars then
+            -- Keyed by StatusTrackingBarInfo.BarsEnum, so pairs not ipairs.
+            for _, bar in pairs(container.bars) do
+                setWidth(bar, want)
+                setWidth(bar.StatusBar, want)
+            end
+        end
+    end
+end
+
+-- Apply runs on every ApplyAll; width is cheap and idempotent.
+local applyText = StatusBars.Apply
+function StatusBars:Apply()
+    applyText(self)
+    applyWidth()
+end
+
+function StatusBars:Init()
+    local mgr = _G["StatusTrackingBarManager"]
+    if mgr and mgr.UpdateBarVisuals then
+        hooksecurefunc(mgr, "UpdateBarVisuals", function()
+            ns:SafeCall("StatusBars:width", applyWidth)
+        end)
+        StatusBars.hookedVisuals = true
+    end
+end
+
 function StatusBars:StatusText()
     if getCVar() == nil then
         return "status bars: |cffff8080no xpBarText cvar|r"

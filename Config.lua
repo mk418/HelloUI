@@ -56,6 +56,12 @@ local accountDefaults = {
     -- both and splitting it here would be a lie.
     alwaysShowBarText = true,
 
+    -- Width of the XP/reputation bars, matched to the action bar stack: 12
+    -- buttons at a 38px pitch, less the trailing padding. Edit Mode offers no
+    -- width control for these - only a scale, which squashes the height - so
+    -- this is set directly. 0 leaves Blizzard's 1024 alone.
+    statusBarWidth = 454,
+
     -- Player.lua. The only unit frame setting in the entire old profile.
     classColorPlayerHealth = true,
 

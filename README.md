@@ -28,6 +28,9 @@ text permanently readable. See `DESIGN.md` for the evidence and the reasoning.
   alpha because it was meant to sit on the bar backdrop; with the backdrop gone
   that reads as no border at all. This takes it to full alpha — Blizzard's own
   texture, just actually visible.
+- **Narrows the XP/reputation bars** to the width of the action bar stack.
+  They ship 1024px wide and Edit Mode offers only a scale, which squashes the
+  height — so the width is set directly.
 - **Keeps the XP and reputation bar numbers on screen** instead of
   mouseover-only. This is Blizzard's `xpBarText` setting, and it covers both
   bars together.

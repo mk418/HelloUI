@@ -126,14 +126,11 @@ local BASE_Y = 24             -- bottom row's height above the screen edge
 local FLANK_X = 322
 local CASTBAR_Y = 245  -- DragonflightUI's own default, above the bars
 
--- The status tracking bars' "Size" is a SCALE, not a width: Edit Mode does
--- SetScale(value / 100) on a container that is 1024 wide. The slider runs
--- 50..130 in steps of 5 and is stored pre-conversion, so raw 0 is 50% - the
--- narrowest it offers, giving 512px against the 454px stack. Not an exact
--- match, because 454 would need 44% and the slider will not go there, but far
--- closer than the full-width 1024 it ships at. Note it scales height too,
--- which is why the bar ends up appropriately slim rather than merely short.
-local STATUS_SIZE = 0
+-- Left at 100%. The status bars' "Size" is a SCALE, not a width - Edit Mode
+-- does SetScale(value / 100) - so using it to narrow the bar also squashed its
+-- height, and the slider floors at 50% anyway, which was still wider than the
+-- stack. Width is set directly instead; see StatusBars.lua.
+local STATUS_SIZE = 10
 local STATUS_Y = 4     -- the XP/reputation bars, under the stack
 
 -- Geometry is measured off DragonflightUI's own default screenshot: three

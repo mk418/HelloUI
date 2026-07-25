@@ -70,7 +70,7 @@ ships in the client.
 
 ## Current scope
 
-Eleven features, each independently toggleable. Three changes from the first
+Twelve features, each independently toggleable. Three changes from the first
 count: pinning the chat frame turned out to belong to Edit Mode, for the same
 reason the minimap tuck did (see *Out of scope*); hiding the main bar art
 turned out to be real work rather than the no-op it first looked like; and the
@@ -126,6 +126,15 @@ DragonflightUI's layout was its default.
   context and persist into the player's saved layout. Takes the latency strip
   with it exactly as Blizzard's setting does; the micro menu and bag bar are
   children of `UIParent` and unaffected.
+- **Status bar width** — the XP/reputation bars ship 1024px wide, far wider
+  than the 454px action bar stack. Edit Mode has no width control for them:
+  its `Size` setting is a *scale* (`SetScale(value / 100)`), so narrowing with
+  it squashes the height too, and it floors at 50% — still wider than the
+  stack. So the width is set directly, on three frames per container, because
+  they do not follow each other: `StatusTrackingBarTemplate`'s inner
+  `StatusBar` carries an explicit `<Size x="1024">` anchored only at `RIGHT`,
+  and `InitializeBars` stamps that size in again at creation. Re-asserted after
+  `UpdateBarVisuals`, hooked on the manager *instance*.
 - **Status bar text** — make the XP and reputation bar numbers permanently
   readable instead of mouseover-only. This is one setting, not the profile's
   two, and it is a single CVar write: Blizzard's own
