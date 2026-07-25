@@ -1030,6 +1030,14 @@ do
     eq(cx, 3, "clock text keeps Blizzard's horizontal offset")
     eq(cy, 2, "and its half-pixel y is rounded, now that it lands on the grid")
 
+    -- The offset is nudgeable, since the right optical value cannot be read
+    -- off a screenshot.
+    ns.Minimap:NudgeClock(1, 0)
+    local _, _, _, nx, ny = clockText:GetPoint(1)
+    eq(nx, 1, "clock x nudged")
+    eq(ny, 0, "clock y nudged")
+    ns.Minimap:NudgeClock(3, 2)
+
     -- Switching it off hands the scale back.
     ns.Config:Set("fixClockText", false)
     ns.Minimap:Apply()

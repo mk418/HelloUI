@@ -114,6 +114,13 @@ local accountDefaults = {
     -- 110%.
     fixClockText = true,
 
+    -- Where the clock digits sit inside their box. Blizzard uses 3, 1.5;
+    -- the y is rounded to the grid and both are nudgeable with
+    -- `/hui clock <x> <y>` because the right optical offset cannot be read
+    -- off a screenshot.
+    clockTextX = 3,
+    clockTextY = 2,
+
     -- Minimap size, as Edit Mode's raw slider value: 5 is 100%, 6 is 110%,
     -- each step 10%. Applied through the layout.
     --

@@ -40,6 +40,7 @@ read_globals = {
     "GameTooltip",
     "UnitClass",
     "UnitName",
+    "GetTrackingTexture",
     "StaticPopup_Show",
     "ShowUIPanel",
     "HideUIPanel",

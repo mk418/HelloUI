@@ -321,6 +321,15 @@ SlashCmdList["HELLOUI"] = function(msg)
         ns:Print("account settings reset to defaults")
     elseif cmd == "char" then
         ns.Config:CharCommand(rest)
+    elseif cmd == "clock" then
+        local cx, cy = rest:match("^(-?%d+)%s+(-?%d+)$")
+        if cx then
+            ns.Minimap:NudgeClock(tonumber(cx), tonumber(cy))
+        else
+            ns.Minimap:NudgeClock()
+        end
+    elseif cmd == "minimapprobe" then
+        ns.Minimap:Probe()
     elseif cmd == "layout" then
         if rest == "status" then
             ns.Layout:Status()
@@ -346,6 +355,8 @@ SlashCmdList["HELLOUI"] = function(msg)
         ns:Print("  |cff808080layout|r            - build/reset the Dragonflight bar layout")
         ns:Print("  |cff808080layout char|r       - give this character its own layout")
         ns:Print("  |cff808080layout probe|r      - print where the bars actually are")
+        ns:Print("  |cff808080minimapprobe|r      - the tracking button and clock's real state")
+        ns:Print("  |cff808080clock <x> <y>|r     - nudge the clock digits in their box")
     end
 end
 

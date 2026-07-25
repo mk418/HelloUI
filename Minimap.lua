@@ -188,13 +188,17 @@ local function applyClock()
         end
     end
 
-    local point, rel, relPoint, x, y = ticker:GetPoint(1)
-    if point and y and y ~= math.floor(y) then
-        ticker:ClearAllPoints()
-        ticker:SetPoint(point, rel or button, relPoint, x, math.floor(y + 0.5))
-    end
+    -- Blizzard's x=3 is an attempt at optically centring the digits inside
+    -- box art that is not symmetric - its own HitRectInsets are 8 left, 5
+    -- right - and whether 3 is the right number is not something the source
+    -- can settle. So the offset is a setting, nudgeable live with
+    -- `/hui clock <x> <y>`, defaulting to Blizzard's own rounded to the grid.
+    ticker:ClearAllPoints()
+    ticker:SetPoint("CENTER", button, "CENTER",
+        Config:Get("clockTextX") or 3, Config:Get("clockTextY") or 2)
 
-    Minimap_.clockFixed = ("scale %.3f"):format(button:GetScale() or 1)
+    Minimap_.clockFixed = ("scale %.3f, text %d,%d"):format(button:GetScale() or 1,
+        Config:Get("clockTextX") or 3, Config:Get("clockTextY") or 2)
 end
 
 function Minimap_:Apply()
@@ -238,6 +242,41 @@ function Minimap_:Init()
         end)
         Minimap_.hookedShow = true
     end
+end
+
+-- Live nudge for the clock digits, because a one or two pixel optical offset
+-- is not something that can be settled from a screenshot.
+function Minimap_:NudgeClock(x, y)
+    if x then Config:Set("clockTextX", x) end
+    if y then Config:Set("clockTextY", y) end
+    applyClock()
+    ns:Print("clock text offset: %d, %d |cff808080(/hui clock <x> <y>)|r",
+        Config:Get("clockTextX") or 3, Config:Get("clockTextY") or 2)
+end
+
+-- Everything the tracking button and clock actually report, since neither is
+-- diagnosable from a screenshot.
+function Minimap_:Probe()
+    local function dump(label, f)
+        if not f then ns:Print("  %-12s |cff808080absent|r", label) return end
+        local parent = f.GetParent and f:GetParent()
+        local pname = parent and parent.GetName and parent:GetName() or "?"
+        local l = f.GetLeft and f:GetLeft()
+        ns:Print("  %-12s parent=%s shown=%s alpha=%.2f level=%s %s",
+            label, tostring(pname), tostring(f.IsShown and f:IsShown()),
+            (f.GetAlpha and f:GetAlpha()) or -1,
+            tostring(f.GetFrameLevel and f:GetFrameLevel()),
+            l and ("at %d,%d %dx%d"):format(l, f:GetBottom() or 0, f:GetWidth() or 0, f:GetHeight() or 0)
+              or "|cffff8080unpositioned|r")
+    end
+    dump("tracking", trackingFrame())
+    dump("trackingIcon", _G["MiniMapTrackingIcon"])
+    dump("lfg", _G["LFGMinimapFrame"])
+    dump("backdrop", _G["MinimapBackdrop"])
+    dump("minimap", _G["Minimap"])
+    dump("clock", _G["TimeManagerClockButton"])
+    local tex = GetTrackingTexture and GetTrackingTexture()
+    ns:Print("  GetTrackingTexture() = %s", tostring(tex))
 end
 
 function Minimap_:StatusText()
