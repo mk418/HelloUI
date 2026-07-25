@@ -277,7 +277,8 @@ end
 ----------------------------------------------------------------------
 
 _G.Enum = _G.Enum or {}
-_G.Enum.EditModeSystem = { ActionBar = 1, UnitFrame = 2, Minimap = 3, StatusTrackingBar = 4, CastBar = 5 }
+_G.Enum.EditModeSystem = { ActionBar = 1, UnitFrame = 2, Minimap = 3, StatusTrackingBar = 4, CastBar = 5, ChatFrame = 6 }
+_G.Enum.EditModeMinimapSetting = { HeaderUnderneath = 0, RotateMinimap = 1, Size = 2 }
 _G.Enum.EditModeStatusTrackingBarSystemIndices = { StatusTrackingBar1 = 1, StatusTrackingBar2 = 2 }
 _G.Enum.EditModeStatusTrackingBarSetting = { Size = 0 }
 _G.Enum.EditModeCastBarSetting = { BarSize = 0, LockToPlayerFrame = 1 }
@@ -319,13 +320,22 @@ _G.EditModePresetLayoutManager = {
                     anchorInfo = { point = "BOTTOM", relativeTo = "StatusTrackingBarManager", relativePoint = "BOTTOM", offsetX = 0, offsetY = 0 },
                     settings = { { setting = 0, value = 10 } }, isInDefaultPosition = true })
             end
+            -- A system HelloUI never positions, as the control for "we leave
+            -- everything else exactly as Blizzard had it".
+            table.insert(systems, { system = 2, systemIndex = nil,
+                anchorInfo = { point = "TOPLEFT", relativeTo = "UIParent", relativePoint = "TOPLEFT", offsetX = 0, offsetY = 0 },
+                settings = {}, isInDefaultPosition = true })
+            -- ChatFrame and Minimap: systems with settings directly.
+            table.insert(systems, { system = 6, systemIndex = nil,
+                anchorInfo = { point = "BOTTOMLEFT", relativeTo = "UIParent", relativePoint = "BOTTOMLEFT", offsetX = 0, offsetY = 0 },
+                settings = {}, isInDefaultPosition = true })
             -- CastBar: a system with settings directly, so systemIndex nil.
             table.insert(systems, { system = 5, systemIndex = nil,
                 anchorInfo = { point = "CENTER", relativeTo = "UIParent", relativePoint = "CENTER", offsetX = 0, offsetY = 0 },
                 settings = { { setting = 1, value = 0 } }, isInDefaultPosition = true })
             table.insert(systems, { system = 3, systemIndex = nil,
                 anchorInfo = { point = "TOPRIGHT", relativeTo = "UIParent", relativePoint = "TOPRIGHT", offsetX = 0, offsetY = 0 },
-                settings = {}, isInDefaultPosition = true })
+                settings = { { setting = 2, value = 5 } }, isInDefaultPosition = true })
             return { layoutIndex = idx, layoutName = name, layoutType = 0, systems = systems }
         end
         return { preset("Modern", 1), preset("Classic", 2) }
@@ -712,7 +722,7 @@ do
             bars = bars + 1
             if not e.isInDefaultPosition then moved = moved + 1 end
             if e.systemIndex == 1 then mainBar = e end
-        elseif e.system == 3 then
+        elseif e.system == 2 then
             minimapSystem = e
         end
     end
@@ -792,6 +802,45 @@ do
         if e.system == 5 then cast = e end
     end
     ok(cast ~= nil, "cast bar found")
+
+    -- The chat frame is lifted clear of the bottom-left flank block, which
+    -- occupies exactly where Blizzard parks chat once bar 5 is switched on.
+    local chat6
+    for _, e in ipairs(sys) do
+        if e.system == 6 then chat6 = e end
+    end
+    ok(chat6 ~= nil, "chat frame positioned in the layout")
+    ok(chat6 and chat6.anchorInfo.offsetY > 24 + 38 * 3,
+        "chat sits above the flank block, not underneath it")
+
+    -- The minimap is nudged one slider step larger: raw 5 is 100%, raw 6 110%.
+    local map
+    for _, e in ipairs(sys) do
+        if e.system == 3 then map = e end
+    end
+    do
+        local msize
+        for _, st in ipairs((map and map.settings) or {}) do
+            if st.setting == 2 then msize = st.value end
+        end
+        eq(msize, 6, "minimap one step larger than the preset's 100%")
+    end
+
+    -- The bar-1 paging arrows, via Blizzard's own HideBarScrolling, and only
+    -- on the main bar since it is the only one carrying that setting.
+    local scrolling, otherHasScrolling = nil, false
+    for _, e in ipairs(sys) do
+        if e.system == 1 then
+            for _, st in ipairs(e.settings) do
+                if st.setting == 8 then
+                    if e.systemIndex == 1 then scrolling = st.value
+                    else otherHasScrolling = true end
+                end
+            end
+        end
+    end
+    eq(scrolling, 1, "bar 1's paging arrows hidden")
+    ok(not otherHasScrolling, "and HideBarScrolling written only on the main bar")
     eq(cast and cast.anchorInfo.relativePoint, "BOTTOM", "cast bar measured from the screen bottom")
     eq(cast and cast.anchorInfo.offsetY, 245, "cast bar sits above the action bars")
     eq(cast and cast.isInDefaultPosition, false, "cast bar flagged as moved")

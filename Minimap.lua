@@ -11,10 +11,12 @@ local Config = ns.Config
 -- This module got smaller than the design expected, and both reductions are
 -- the right answer rather than a shortcut.
 --
--- 1. THE CORNER TUCK SHIPS NOTHING. Stock 1.15.9 already anchors the minimap
+-- 1. THIS MODULE MOVES NOTHING. Stock 1.15.9 already anchors the minimap
 --    flush to the top right: both Edit Mode preset layouts set the Minimap
 --    system to TOPRIGHT / UIParent / TOPRIGHT at offset 0,0, and the XML
---    agrees. There is nothing to move.
+--    agrees. There is nothing to move. (Its SIZE is set, but through the Edit
+--    Mode layout in Layout.lua, which is the sanctioned route - not from
+--    here.)
 --
 --    The residual gap between the visible ring and the screen edge is not an
 --    anchor problem. MinimapCluster is a ResizeLayoutFrame sized to the union
@@ -72,8 +74,45 @@ local function applyTimeOfDay()
     if not map or map:IsShown() then f:Show() end
 end
 
+--------------------------------------------------------------------------
+-- The tracking button
+--
+-- On Era this is genuinely broken in Blizzard's own XML.
+-- Blizzard_Minimap/Classic/MinimapTracking_Simple.xml declares
+--   <Frame name="MiniMapTracking" mixin="MinimapTrackingSimpleMixin" hidden="true">
+-- with NO parent attribute and an unqualified <Anchor point="TOPLEFT" x="11"
+-- y="-26"/>, and MinimapTracking_Simple.lua never reparents it. So it lands
+-- at the top-left of the SCREEN, next to the player frame, rather than on the
+-- minimap. The non-vanilla variant of the same file has parent="MinimapBackdrop";
+-- the vanilla one lost it.
+--
+-- Only classes with an active tracking ability ever see it, which is why it
+-- survives in the shipped client. The offsets are DragonflightUI's, which
+-- put it where the tracking button has always sat on the ring.
+--------------------------------------------------------------------------
+
+local function trackingFrame()
+    return _G["MiniMapTrackingFrame"] or _G["MiniMapTracking"]
+end
+
+local function applyTracking()
+    if not Config:Enabled("fixTrackingIcon") then return end
+
+    local f = trackingFrame()
+    local map = _G["Minimap"]
+    if not (f and map and f.SetParent) then return end
+    if f.HelloUIReparented then return end
+
+    f:SetParent(map)
+    f:ClearAllPoints()
+    f:SetPoint("CENTER", map, "CENTER", -52.56, 53.51)
+    f.HelloUIReparented = true
+    Minimap_.trackingFixed = true
+end
+
 function Minimap_:Apply()
     applyTimeOfDay()
+    applyTracking()
 end
 
 function Minimap_:Init()
@@ -115,5 +154,8 @@ function Minimap_:Status()
     ns:Print("minimap: time-of-day dial %s |cff808080(toggle hook=%s, show hook=%s)|r",
         Config:Enabled("hideTimeOfDay") and "hidden" or "shown",
         tostring(Minimap_.hookedToggle or false), tostring(Minimap_.hookedShow or false))
-    ns:Print("  |cff808080position is Edit Mode's job - stock is already flush top-right|r")
+    ns:Print("  |cff808080position is Edit Mode's job; size is set in the layout|r")
+    local track = trackingFrame()
+    ns:Print("  |cff808080tracking button: %s|r",
+        (not track) and "absent" or (Minimap_.trackingFixed and "moved onto the minimap" or "left alone"))
 end

@@ -41,6 +41,10 @@ local accountDefaults = {
     -- Mode layout, so it needs `/hui layout` to take effect.
     showEmptyButtons = true,
 
+    -- The up/down arrows beside bar 1 that page it to another bar. Blizzard's
+    -- own HideBarScrolling setting, applied through the Edit Mode layout.
+    hidePagingArrows = true,
+
     -- Bars.lua. DragonflightUI's own base action bar set: bars 1-5 shown,
     -- 6-8 off (its defaults have activate=false for those three), stance and
     -- pet shown. This replaces the earlier profile-derived default, which had
@@ -97,6 +101,11 @@ local accountDefaults = {
     -- top-right and MinimapCluster is an Edit Mode system; moving it is Edit
     -- Mode's job.
     hideTimeOfDay = true,
+
+    -- Reparent the tracking button onto the minimap. On Era it is declared
+    -- with no parent at all and anchored TOPLEFT, so Blizzard leaves it
+    -- stranded in the corner of the screen next to the player frame.
+    fixTrackingIcon = true,
 
     -- No chat settings. The old profile pinned ChatFrame1 to 460x207 at
     -- 42,35, but on 1.15.9 ChatFrame1 inherits EditModeChatFrameSystemTemplate

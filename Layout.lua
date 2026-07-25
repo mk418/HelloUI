@@ -131,6 +131,22 @@ local CASTBAR_Y = 245  -- DragonflightUI's own default, above the bars
 -- height, and the slider floors at 50% anyway, which was still wider than the
 -- stack. Width is set directly instead; see StatusBars.lua.
 local STATUS_SIZE = 10
+
+-- Minimap size. The slider is 50..200 in steps of 10 stored pre-conversion, so
+-- raw 5 is 100% and raw 6 is 110% - slightly bigger, as asked, without
+-- crowding the corner.
+local MINIMAP_SIZE = 6
+
+-- Chat. Bar 5 occupies the bottom-left once it is switched on, which is
+-- exactly where Blizzard parks the chat frame, so the two overlap. Lifting
+-- chat above the block is the fix.
+--
+-- This is not a reversal of the decision not to pin the chat frame. That
+-- refusal was about fighting Edit Mode with SetPoint on a frame Edit Mode
+-- owns and silently re-anchors. Writing it into the layout is the sanctioned
+-- route - the same mechanism every other frame here uses - and it stays
+-- editable and draggable afterwards.
+local CHAT_X = 16
 local STATUS_Y = 4     -- the XP/reputation bars, under the stack
 
 -- Geometry is measured off DragonflightUI's own default screenshot: three
@@ -150,7 +166,7 @@ local function geometry()
     local SI = Enum.EditModeStatusTrackingBarSystemIndices
 
     local g = {
-        { system = BAR, index = I.MainBar, rows = 1,
+        { system = BAR, index = I.MainBar, rows = 1, scrolling = true,
           point = "BOTTOM", relativeTo = "UIParent", relativePoint = "BOTTOM", x = 0, y = BASE_Y },
 
         { system = BAR, index = I.Bar2, rows = 1,
@@ -200,6 +216,21 @@ local function geometry()
         { system = BAR, index = I.ExtraBar3, rows = 1,
           point = "BOTTOM", relativeTo = "UIParent", relativePoint = "BOTTOM", x = 0, y = BASE_Y + ROW_STEP * 6 },
     }
+
+    -- The chat frame, lifted clear of the bottom-left flank block.
+    local CHATSYS = Enum.EditModeSystem.ChatFrame
+    if CHATSYS then
+        g[#g + 1] = { system = CHATSYS, index = nil,
+            point = "BOTTOMLEFT", relativeTo = "UIParent", relativePoint = "BOTTOMLEFT",
+            x = CHAT_X, y = BASE_Y + ROW_STEP * 3 + 12 }
+    end
+
+    -- The minimap, a little larger.
+    local MAP = Enum.EditModeSystem.Minimap
+    if MAP and Enum.EditModeMinimapSetting then
+        g[#g + 1] = { system = MAP, index = nil, minimapSize = MINIMAP_SIZE,
+            point = "TOPRIGHT", relativeTo = "UIParent", relativePoint = "TOPRIGHT", x = 0, y = 0 }
+    end
 
     -- The cast bar. Blizzard's preset parks it dead centre of the screen;
     -- DragonflightUI puts it just above the action bars, which is where the
@@ -349,6 +380,16 @@ function Layout:Build()
                 -- buttons were, so it is a setting.
                 setSetting(entry, S.AlwaysShowButtons,
                     Config:Enabled("showEmptyButtons") and 1 or 0)
+                -- The little up/down arrows that page bar 1. Blizzard has a
+                -- setting for them, and only the main bar carries it.
+                if def.scrolling then
+                    setSetting(entry, S.HideBarScrolling,
+                        Config:Enabled("hidePagingArrows") and 1 or 0)
+                end
+            end
+
+            if def.minimapSize ~= nil and Enum.EditModeMinimapSetting then
+                setSetting(entry, Enum.EditModeMinimapSetting.Size, def.minimapSize)
             end
 
             if def.statusSize ~= nil and Enum.EditModeStatusTrackingBarSetting then

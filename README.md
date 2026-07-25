@@ -37,13 +37,18 @@ text permanently readable. See `DESIGN.md` for the evidence and the reasoning.
 - **Class-colours the player health bar.**
 - **Darkmode** — desaturates and tints Blizzard's frame art across unit frames,
   the minimap, action bar art and cast bars.
+- **Puts the tracking button back on the minimap.** On Classic Era Blizzard
+  declares it with no parent at all, so it strands itself in the top-left
+  corner of the screen next to your player frame.
 - **Hides the minimap's time-of-day dial** (the sun/moon icon — on Classic Era
   it has no click action at all).
 - **Class-colours the friends list**, and shows a heart next to friends whose
   note contains `<3`.
 - **Builds DragonflightUI's bar layout** as a real Edit Mode layout named
   `HelloUI` — bars stacked and centred, 80% icons, 2px padding — and switches to
-  it once, on first login. Your own layouts are never touched; switch back in
+  it once, on first login. The layout also covers the cast bar, the chat
+  frame, the micro menu, the bags, the minimap's size and the XP/reputation
+  bars — everything that would otherwise collide with the arrangement. Your own layouts are never touched; switch back in
   Edit Mode any time.
 
   Because Edit Mode saves your dragging into the layout itself, **`/hui layout`
