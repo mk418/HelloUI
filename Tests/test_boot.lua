@@ -292,6 +292,22 @@ _G.UnitName = function() return "Elouan" end
 _G.StaticPopupDialogs = {}
 _G._shownPopup = nil
 _G.StaticPopup_Show = function(which) _G._shownPopup = which end
+
+-- Dropdown menu API, enough of it to build the profile picker and to drive its
+-- entries: the test needs to click one, so AddButton keeps the info tables.
+_G.UIDropDownMenu_SetWidth = function() end
+_G.UIDropDownMenu_SetText = function(frame, text) frame._text = text end
+_G.UIDropDownMenu_CreateInfo = function() return {} end
+_G.UIDropDownMenu_Initialize = function(frame, fn) frame._initialize = fn end
+_G.UIDropDownMenu_AddButton = function(info)
+    _G._dropdownEntries = _G._dropdownEntries or {}
+    _G._dropdownEntries[#_G._dropdownEntries + 1] = info
+end
+_G._openDropdown = function(frame)
+    _G._dropdownEntries = {}
+    if frame._initialize then frame._initialize(frame, 1) end
+    return _G._dropdownEntries
+end
 _G.RAID_CLASS_COLORS = { WARRIOR = { r = 0.78, g = 0.61, b = 0.43 }, MAGE = { r = 0.41, g = 0.8, b = 0.94 } }
 _G.LOCALIZED_CLASS_NAMES_MALE = { WARRIOR = "Warrior", MAGE = "Mage" }
 _G.LOCALIZED_CLASS_NAMES_FEMALE = { WARRIOR = "Warrior", MAGE = "Mage" }
@@ -811,12 +827,12 @@ eq(settingValues["PROXY_SHOW_ACTIONBAR_8"], false, "bar8 hidden")
 eq(_G.MainActionBar._alpha, 1, "bar1 untouched by default")
 -- Hiding bar1 must never Hide() the frame: IsNormalActionBarState() reads
 -- MainActionBar:IsShown() and would drag bars 2-8 down with it.
-ns.Config:SetChar("barsOff", { bar1 = true })
+ns.Config:Set("barsOff", { bar1 = true })
 ns:ApplyAll()
 eq(_G.MainActionBar._alpha, 0, "bar1 made invisible when switched off")
 eq(_G.MainActionBar:IsShown(), true, "bar1 frame stays SHOWN (bars 2-8 depend on it)")
 eq(_G.ActionButton1._mouse, false, "bar1 buttons made non-interactive")
-ns.Config:ClearChar("barsOff")
+ns.Config:Set("barsOff", ns.Config:Default("barsOff"))
 ns:ApplyAll()
 eq(_G.MainActionBar._alpha, 1, "bar1 restored")
 eq(_G.ActionButton1._mouse, true, "bar1 buttons interactive again")
@@ -1159,23 +1175,26 @@ do
     eq(size, 5, "reset restores the shipped icon size")
 end
 
--- Per-character mode: a separate, character-typed, character-named layout.
-ns.Config:SetChar("layoutPerCharacter", true)
+-- The layout follows the PROFILE: a named profile gets its own layout, named
+-- after it, so switching profile switches arrangement too.
+ns.Config:CopyProfile("Raiding")
 ns.Layout:Apply(true)
 do
     local live = _G._savedLayouts()
-    eq(#live, 2, "per-character mode adds a second layout")
+    eq(#live, 2, "a named profile adds a second layout")
     local mine
     for _, l in ipairs(live) do
-        if l.layoutName == "HelloUI - Elouan" then mine = l end
+        if l.layoutName == "HelloUI - Raiding" then mine = l end
     end
-    ok(mine ~= nil, "named for the character")
-    eq(mine and mine.layoutType, 2, "typed Character so other characters never see it")
-    eq(_G._activeLayoutName(), "HelloUI - Elouan", "and it is the active one")
+    ok(mine ~= nil, "named for the profile, not the character")
+    eq(mine and mine.layoutType, 1,
+        "typed Account, because a profile is shareable and a character is not")
+    eq(_G._activeLayoutName(), "HelloUI - Raiding", "and it is the active one")
 end
 ns.Layout:Apply(true)
-eq(#_G._savedLayouts(), 2, "per-character re-apply refreshes too")
-ns.Config:ClearChar("layoutPerCharacter")
+eq(#_G._savedLayouts(), 2, "re-applying refreshes it rather than adding another")
+ns.Config:UseProfile("Default")
+ns.Config:DeleteProfile("Raiding")
 
 print("\nbar art")
 eq(mainMenuBar:IsShown(), false, "main bar backdrop hidden")
@@ -1627,13 +1646,13 @@ ok(lr == 1 and lg == 0.4, "and its own colour, which a second pass would flatten
 
 print("\ncombat deferral")
 inCombat = true
-ns.Config:SetChar("barsOff", { bar1 = true })
+ns.Config:Set("barsOff", { bar1 = true })
 ns:ApplyAllWhenSafe()
 eq(_G.MainActionBar._alpha, 1, "protected work deferred while in combat")
 inCombat = false
 fire("PLAYER_REGEN_ENABLED")
 eq(_G.MainActionBar._alpha, 0, "deferred work drained after combat")
-ns.Config:ClearChar("barsOff")
+ns.Config:Set("barsOff", ns.Config:Default("barsOff"))
 ns:ApplyAll()
 
 ----------------------------------------------------------------------
@@ -1663,21 +1682,75 @@ eq(_G.ActionButton1.HotKey._alpha, 0, "keybind text hidden again")
 print("\nslash commands")
 -- minimapprobe and tracking are in here because both print formatted numbers off
 -- frames that may be absent, and a bare %s on a nil is a real hazard in 5.1.
-for _, cmd in ipairs({ "", "status", "apply", "char", "char clear", "char barsoff bar3",
-                       "char barsoff nonsense", "minimapprobe", "tracking", "tracking 45",
+for _, cmd in ipairs({ "", "status", "apply", "profile", "profile use Default",
+                       "profile use Nope", "profile new", "profile delete Default",
+                       "minimapprobe", "tracking", "tracking 45",
                        "clock 1 -1", "help", "reset" }) do
     local success, err = pcall(_G.SlashCmdList["HELLOUI"], cmd)
     ok(success, ("/hui %s runs without error%s"):format(cmd, success and "" or ": " .. tostring(err)))
 end
 
-print("\nper-character overrides")
-ns.Config:SetChar("hideKeybindText", false)
-ns:ApplyAll()
-eq(_G.ActionButton1.HotKey._alpha, 1, "character override beats the account setting")
-ok(ns.Config:HasAnyCharOverride(), "override recorded")
-ns.Config:ResetChar()
-ns:ApplyAll()
-eq(_G.ActionButton1.HotKey._alpha, 0, "clearing overrides falls back to the account setting")
+print("\nprofiles")
+do
+    eq(ns.Config:ProfileName(), "Default", "characters start on Default")
+
+    -- A new profile is a COPY of the one you are on, and switching to it is
+    -- what "these settings apply to all characters" stops being true.
+    ns.Config:Set("hideKeybindText", true)
+    ok(ns.Config:CopyProfile("Alt"), "a profile can be branched off the current one")
+    eq(ns.Config:ProfileName(), "Alt", "and the character switches to it")
+    eq(ns.Config:Get("hideKeybindText"), true, "carrying the settings it was copied from")
+
+    ns.Config:Set("hideKeybindText", false)
+    ns:ApplyAll()
+    eq(_G.ActionButton1.HotKey._alpha, 1, "editing the new profile changes this character")
+
+    ns.Config:UseProfile("Default")
+    ns:ApplyAll()
+    eq(ns.Config:Get("hideKeybindText"), true, "and left the profile it came from alone")
+    eq(_G.ActionButton1.HotKey._alpha, 0, "switching back restores the other settings")
+
+    -- Isolation in the other direction: a write here must not leak into Alt.
+    ns.Config:Set("trackingAngle", 42)
+    ns.Config:UseProfile("Alt")
+    eq(ns.Config:Get("trackingAngle"), 19, "a write in one profile does not reach the other")
+    ns.Config:UseProfile("Default")
+    ns.Config:Set("trackingAngle", 19)
+
+    -- Reset is per profile.
+    ns.Config:UseProfile("Alt")
+    ns.Config:Set("hideMacroText", false)
+    ns.Config:ResetProfile()
+    eq(ns.Config:Get("hideMacroText"), true, "reset restores this profile's defaults")
+    ns.Config:UseProfile("Default")
+
+    -- Delete, including the rules around it.
+    ok(not ns.Config:DeleteProfile("Default"), "Default cannot be deleted")
+    ok(not ns.Config:DeleteProfile("Nope"), "nor can one that does not exist")
+    ns.Config:UseProfile("Alt")
+    ok(ns.Config:DeleteProfile("Alt"), "a named profile can be")
+    eq(ns.Config:ProfileName(), "Default", "and deleting the one you are on drops you to Default")
+
+    -- A character pointing at a profile another character deleted falls back at
+    -- load instead of resurrecting it as a bag of defaults.
+    HelloUICharDB.profile = "Ghost"
+    ns.Config:Init()
+    eq(ns.Config:ProfileName(), "Default", "a deleted profile is not recreated at login")
+
+    -- The panel's dropdown lists them and switching through it works.
+    local entries = _G._openDropdown(_G["HelloUIOptProfile"])
+    eq(#entries, 1, "the dropdown lists every profile")
+    ns.Config:CopyProfile("Second")
+    ns.Config:UseProfile("Default")
+    entries = _G._openDropdown(_G["HelloUIOptProfile"])
+    eq(#entries, 2, "including one just created")
+    for _, info in ipairs(entries) do
+        if info.text == "Second" then info.func() end
+    end
+    eq(ns.Config:ProfileName(), "Second", "and clicking one switches to it")
+    ns.Config:UseProfile("Default")
+    ns.Config:DeleteProfile("Second")
+end
 
 ----------------------------------------------------------------------
 -- Regressions
@@ -1724,16 +1797,22 @@ do
                       "friendsClassColor", "friendsHeart", "buttonBorders",
                       "darkmodeDesaturate", "darkmodeAreas", "darkmodeTint" }
 
-    -- An install that had ticked every one of them, including two set to false.
-    for _, key in ipairs(RETIRED) do HelloUIDB[key] = false end
+    -- An install that had ticked every one of them, including two set to false,
+    -- with the keys where they really lived: inside the profile now, and at the
+    -- top level of HelloUIDB for anyone who has not been through the migration.
+    for _, key in ipairs(RETIRED) do
+        HelloUIDB[key] = false
+        ns.Config:Profile()[key] = false
+    end
     -- as a table too, which is how darkmodeAreas was really stored
-    HelloUIDB.darkmodeAreas = { minimap = false, castbar = false }
-    HelloUICharDB.overrides.castBarStyle = false
+    ns.Config:Profile().darkmodeAreas = { minimap = false, castbar = false }
     ns.Config:Init()
     local left = {}
     for _, key in ipairs(RETIRED) do
         if HelloUIDB[key] ~= nil then left[#left + 1] = key end
-        if HelloUICharDB.overrides[key] ~= nil then left[#left + 1] = key .. " (char)" end
+        for name, profile in pairs(HelloUIDB.profiles) do
+            if profile[key] ~= nil then left[#left + 1] = key .. " (" .. name .. ")" end
+        end
     end
     ok(#left == 0, ("retired settings are cleared out of saved variables%s"):format(
         #left > 0 and (" - left " .. table.concat(left, ", ")) or ""))
@@ -1792,7 +1871,7 @@ do
 
     -- And a control picked from the far end of the panel really is inside it,
     -- so the check above cannot pass by the panel simply being empty.
-    local deep = _G["HelloUIOptLayoutPerChar"]
+    local deep = _G["HelloUIOptAskLayout"]
     ok(deep ~= nil and deep:GetParent() == scrollChild,
         "and the last control in the panel is inside the scroll child")
 end
@@ -1803,12 +1882,12 @@ end
 local barBox = _G["HelloUIOptBarOffbar5"]
 barBox:SetChecked(false)
 barBox:GetScript("OnClick")(barBox)
-eq(HelloUIDB.barsOff.bar5, false, "unticking stores a real false")
+eq(ns.Config:GetTable("barsOff").bar5, false, "unticking stores a real false")
 ns.Config:Init()  -- stands in for the next login
-eq(HelloUIDB.barsOff.bar5, false, "and it survives applyDefaults on the next login")
+eq(ns.Config:GetTable("barsOff").bar5, false, "and it survives applyDefaults on the next login")
 barBox:SetChecked(true)
 barBox:GetScript("OnClick")(barBox)
-eq(HelloUIDB.barsOff.bar5, true, "re-ticking stores true")
+eq(ns.Config:GetTable("barsOff").bar5, true, "re-ticking stores true")
 
 -- An existing install carries the OLD profile-derived bar set. applyDefaults
 -- only fills in missing keys, so changing the default could not remove a
@@ -1816,55 +1895,107 @@ eq(HelloUIDB.barsOff.bar5, true, "re-ticking stores true")
 -- bars 5 through 8 all go dark. This is that exact database.
 do
     HelloUIDB = { barsOff = { bar5 = true } }
+    HelloUICharDB = {}
     ns.Config:Init()
-    eq(HelloUIDB.barsOff.bar5, nil, "migration clears the old profile-derived bar5")
-    eq(HelloUIDB.barsOff.bar6, true, "and installs the base set")
+    eq(ns.Config:GetTable("barsOff").bar5, nil, "migration clears the old profile-derived bar5")
+    eq(ns.Config:GetTable("barsOff").bar6, true, "and installs the base set")
     ok(HelloUIDB.barsBaseV2 == true, "latched so it runs once")
 
     -- Second login must not touch a deliberate change made since.
-    HelloUIDB.barsOff.bar5 = true
+    ns.Config:GetTable("barsOff").bar5 = true
     ns.Config:Init()
-    eq(HelloUIDB.barsOff.bar5, true, "a later change is not re-migrated away")
-    ns.Config:ResetAccount()
+    eq(ns.Config:GetTable("barsOff").bar5, true, "a later change is not re-migrated away")
+    ns.Config:ResetProfile()
 end
 
 -- The bar-set migration must not re-run after /hui reset, or it wipes any
 -- bar the player changed since.
 do
-    ns.Config:ResetAccount()
+    ns.Config:ResetProfile()
     ok(HelloUIDB.barsBaseV2 == true, "reset marks the bar migration done")
-    HelloUIDB.barsOff.bar2 = true
+    ns.Config:GetTable("barsOff").bar2 = true
     ns.Config:Init()
-    eq(HelloUIDB.barsOff.bar2, true, "a bar hidden after a reset survives the next login")
-    HelloUIDB.barsOff.bar2 = nil
+    eq(ns.Config:GetTable("barsOff").bar2, true, "a bar hidden after a reset survives the next login")
+    ns.Config:GetTable("barsOff").bar2 = nil
 end
 
 -- The same trap for the tracking angle. Every install that had ever logged in
 -- carried `trackingAngle = 30`, so moving the default to 19 could not reach the
 -- machine that reported the gap.
 do
+    -- A pre-profile database: settings at the top level, no profiles table.
     HelloUIDB = { trackingAngle = 30 }
+    HelloUICharDB = {}
     ns.Config:Init()
-    eq(HelloUIDB.trackingAngle, 19, "an install still on the old 30 is migrated")
+    eq(ns.Config:Get("trackingAngle"), 19, "an install still on the old 30 is migrated")
     ok(HelloUIDB.trackingAngleV2 == true, "latched so it runs once")
+    eq(HelloUIDB.trackingAngle, nil, "and the setting no longer sits at the top level")
 
     -- Value-guarded, which is the whole point: a deliberate nudge is not a
     -- stale default and must survive.
     HelloUIDB = { trackingAngle = 45 }
+    HelloUICharDB = {}
     ns.Config:Init()
-    eq(HelloUIDB.trackingAngle, 45, "but a deliberately nudged angle is left alone")
+    eq(ns.Config:Get("trackingAngle"), 45, "but a deliberately nudged angle is left alone")
 
     -- And once latched, a later 30 is the player's own choice.
-    HelloUIDB.trackingAngle = 30
+    ns.Config:Set("trackingAngle", 30)
     ns.Config:Init()
-    eq(HelloUIDB.trackingAngle, 30, "a 30 chosen after the migration is not re-migrated")
+    eq(ns.Config:Get("trackingAngle"), 30, "a 30 chosen after the migration is not re-migrated")
 
-    ns.Config:ResetAccount()
+    ns.Config:ResetProfile()
     ok(HelloUIDB.trackingAngleV2 == true, "reset marks the angle migration done too")
-    HelloUIDB.trackingAngle = 30
+    ns.Config:Set("trackingAngle", 30)
     ns.Config:Init()
-    eq(HelloUIDB.trackingAngle, 30, "so an angle set after a reset survives the next login")
-    ns.Config:ResetAccount()
+    eq(ns.Config:Get("trackingAngle"), 30, "so an angle set after a reset survives the next login")
+    ns.Config:ResetProfile()
+end
+
+-- The move into profiles, from the database shape that shipped before them:
+-- settings at the top level of HelloUIDB, a sparse override list per character,
+-- and the remembered originals mixed in with both.
+do
+    HelloUIDB = {
+        hideKeybindText = false,
+        trackingAngle = 45,
+        barsOff = { bar6 = true },
+        -- state, not settings: these must NOT be swept into a profile, or
+        -- switching profile would hand Blizzard back the wrong original
+        xpBarTextOriginal = "0",
+        proxyOriginals = { PROXY_SHOW_ACTIONBAR_2 = true },
+        barsBaseV2 = true,
+        trackingAngleV2 = true,
+    }
+    HelloUICharDB = { overrides = { hideKeybindText = true, layoutPerCharacter = true } }
+    ns.Config:Init()
+
+    eq(HelloUIDB.profiles.Default.hideKeybindText, false,
+        "the old account settings become the Default profile")
+    eq(HelloUIDB.profiles.Default.trackingAngle, 45, "carrying their values")
+    eq(HelloUIDB.hideKeybindText, nil, "and leave the top level")
+
+    eq(HelloUIDB.xpBarTextOriginal, "0", "remembered originals stay account-global")
+    ok(HelloUIDB.proxyOriginals ~= nil, "including the bar-visibility originals")
+    eq(HelloUIDB.profiles.Default.xpBarTextOriginal, nil, "and are not copied into a profile")
+
+    -- A character that had overrides gets its own profile, named after itself,
+    -- which is also what its Edit Mode layout was already called.
+    eq(ns.Config:ProfileName(), "Elouan", "a character with overrides gets its own profile")
+    eq(ns.Config:Get("hideKeybindText"), true, "seeded with its override")
+    eq(ns.Config:Get("trackingAngle"), 45, "and the account value for everything else")
+    eq(HelloUICharDB.overrides, nil, "the override list is gone")
+    eq(ns.Config:Get("layoutPerCharacter"), nil, "and its retired key with it")
+
+    -- Idempotent: the second login must not re-run the move.
+    ns.Config:Set("hideKeybindText", false)
+    ns.Config:Init()
+    eq(ns.Config:Get("hideKeybindText"), false, "a later change survives the next login")
+    eq(ns.Config:ProfileName(), "Elouan", "and the character stays on its profile")
+
+    -- Back to a clean single-profile database for everything downstream.
+    HelloUIDB, HelloUICharDB = nil, nil
+    ns.Config:Init()
+    eq(ns.Config:ProfileName(), "Default", "a fresh install starts on Default")
 end
 
 -- The remembered xpBarText must live in saved variables, or a /reload makes
@@ -1898,10 +2029,10 @@ ns:ApplyAll()
 -- Bar 1's page-scroll arrows live in a child frame, not in ActionButton1..12,
 -- and alpha 0 does not stop them taking clicks.
 local pageNumber = Frame.new(nil, _G.MainActionBar)
-ns.Config:SetChar("barsOff", { bar1 = true })
+ns.Config:Set("barsOff", { bar1 = true })
 ns:ApplyAll()
 eq(pageNumber._mouse, false, "bar1's child frames are made non-interactive too")
-ns.Config:ClearChar("barsOff")
+ns.Config:Set("barsOff", ns.Config:Default("barsOff"))
 ns:ApplyAll()
 eq(pageNumber._mouse, true, "and interactive again afterwards")
 

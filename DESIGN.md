@@ -56,9 +56,13 @@ ships in the client.
    exactly right and it's worth copying verbatim.
 4. **No libraries.** Family rule: they're a future-patch breakage surface, and
    for an addon this size they buy nothing.
-5. **One layout, account-wide.** 47 characters, one profile, one deliberate
-   per-character override. That's the data model — a shared DB plus a
-   per-character override, not a profile manager.
+5. **Profiles, one per set of preferences.** This started as a shared DB plus a
+   sparse per-character override list, on the evidence that 47 characters shared
+   one arrangement and exactly one diverged. That was true of the profile being
+   ported and false of how the addon gets used: alts you play differently want
+   different settings, and an exception list makes you enumerate the exceptions.
+   Settings now live in named profiles, each character picks one, and the Edit
+   Mode layout follows the profile so the two cannot disagree.
 6. **Nothing secure touched in combat.** Enabling, disabling or re-anchoring a
    bar happens out of combat or not at all.
 7. **Own only what no sibling owns.** HelloUI is the only addon in the family
@@ -257,13 +261,13 @@ DragonflightUI's layout was its default.
   them to `StatusTrackingBarManager`, which strands them among the button rows
   once the main bar art they sat on is hidden.
 
-  Account-wide or per-character, using Edit Mode's own `layoutType`: `Character`
-  layouts are only visible to the character that owns them, so per-character
-  support is a choice of enum value and a name, not a mechanism. The *choice* is
-  itself a per-character override rather than an account setting — everyone
-  shares one layout until a particular character opts out. Blizzard caps layouts
-  at 5 per type, counted separately, so creation can genuinely fail and says
-  which type is full.
+  Named after the profile: `Default` keeps the bare `HelloUI`, anything else
+  gets `HelloUI - <profile>`. Always an `Account` layout, because a profile is
+  shareable and a character is not — two characters on `Raiding` share its
+  arrangement. A `Character`-typed layout left over from the old per-character
+  mode is still found by name and refreshed in place, so the migration does not
+  strand anyone with two. Blizzard caps layouts at 5 per type, so creation can
+  genuinely fail and says so.
 - **Options panel** — canvas panel, same shape as the other Hello addons.
 
 ## Out of scope
@@ -325,8 +329,8 @@ DragonflightUI's layout was its default.
   anchor and its `Size` setting (110%), for the same reason and by the same
   sanctioned route. "Out of scope" here means HelloUI never calls `SetPoint` on
   `MinimapCluster`, not that the arrangement ignores the minimap.
-- **Profiles, import/export, layout presets.** One account-wide layout plus one
-  character override is the whole requirement.
+- **Import/export and layout presets.** Profiles exist now; shipping them
+  between accounts, or curating preset arrangements, does not.
 
 ---
 
@@ -339,7 +343,7 @@ HelloUI/
 ├── Core.lua        -- namespace, saved variables, guarded event dispatcher,
 │                      per-site error containment, slash commands, the
 │                      out-of-combat apply queue
-├── Config.lua      -- defaults, per-character override resolution
+├── Config.lua      -- defaults, profiles, the migration into them
 ├── Buttons.lua     -- keybind / macro text alpha across every bar
 ├── Bars.lua        -- the bar table; native proxy for 2-8, alpha for the
 │                      rest; gryphons and backdrop

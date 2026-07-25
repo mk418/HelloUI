@@ -142,22 +142,20 @@ local accountDefaults = {
     -- you run `/hui layout`.
     askLayout = true,
 
-    -- Account-wide by default: 47 characters shared one arrangement, and that
-    -- is still the sensible default. This is a PER-CHARACTER decision though -
-    -- the options checkbox and `/hui layout char` write it as a character
-    -- override, so one character opting out leaves everyone else alone.
-    -- Blizzard caps layouts at five per type.
-    layoutPerCharacter = false,
 }
 
--- Per-character. Sparse on purpose: a key is only present here once it has
--- been explicitly overridden for this character, so an account-wide change
--- still reaches every character that has not opted out.
+-- Per-character, and now it is only ever one thing: which profile this
+-- character uses. Everything else lives in the profile.
 --
--- 47 characters shared one layout and exactly one character diverged, so this
--- is deliberately not a profile manager. It is an exception list.
+-- This replaces a sparse override list that was explicitly "not a profile
+-- manager, an exception list". The exception list was the right shape for one
+-- diverging character out of 47; it is the wrong shape for "these settings
+-- apply to everyone and that is annoying", which is what actually happens once
+-- you have alts you play differently.
+local DEFAULT_PROFILE = "Default"
+
 local charDefaults = {
-    overrides = {},
+    profile = DEFAULT_PROFILE,
 }
 
 local function applyDefaults(target, defaults)
@@ -197,6 +195,9 @@ local RETIRED = {
     -- Darkmode is one switch: the per-area picks, the desaturate toggle and the
     -- tint colour are gone, the tint being a constant in Darkmode.lua now.
     "darkmodeDesaturate", "darkmodeAreas", "darkmodeTint",
+    -- Profiles replaced it: a character that wants its own Edit Mode layout
+    -- wants its own profile, and gets one named after itself by the migration.
+    "layoutPerCharacter",
 }
 
 local function dropRetired(t)
@@ -204,14 +205,82 @@ local function dropRetired(t)
     for _, key in ipairs(RETIRED) do t[key] = nil end
 end
 
+-- Everything that is a SETTING, so the migration knows what to move into the
+-- Default profile and what to leave at the top level as remembered state.
+local function isSettingKey(key)
+    return accountDefaults[key] ~= nil
+end
+
 function Config:Init()
     HelloUIDB = HelloUIDB or {}
     HelloUICharDB = HelloUICharDB or {}
-    applyDefaults(HelloUIDB, accountDefaults)
     applyDefaults(HelloUICharDB, charDefaults)
 
+    ----------------------------------------------------------------------
+    -- Into profiles.
+    --
+    -- Before this, every setting sat at the top level of HelloUIDB and was
+    -- shared by all 47 characters, with a sparse per-character override list
+    -- beside it. The move is mechanical: the settings become the Default
+    -- profile, the remembered originals and the latches stay where they are.
+    --
+    -- Latched on `profilesV1` rather than on "is profiles nil", because a
+    -- perfectly good install can end up with an empty profiles table - delete
+    -- every profile but Default, then reset it - and re-running the move then
+    -- would drag stale top-level keys back in.
+    ----------------------------------------------------------------------
+    if not HelloUIDB.profilesV1 then
+        HelloUIDB.profilesV1 = true
+        local default = {}
+        for key, value in pairs(HelloUIDB) do
+            if isSettingKey(key) then
+                default[key] = value
+                HelloUIDB[key] = nil
+            end
+        end
+        HelloUIDB.profiles = HelloUIDB.profiles or {}
+        HelloUIDB.profiles[DEFAULT_PROFILE] = default
+    end
+
+    ----------------------------------------------------------------------
+    -- A character that had overrides gets its own profile, named after itself.
+    --
+    -- Per character rather than all at once, because HelloUICharDB is only
+    -- ever this character's - the others migrate themselves when they next log
+    -- in, which is also when their name is knowable.
+    --
+    -- The name matters beyond tidiness: Layout names its Edit Mode layout
+    -- "HelloUI - <profile>", and the old per-character layout was
+    -- "HelloUI - <character>". Naming the profile after the character means the
+    -- layout it already has is the layout it keeps.
+    ----------------------------------------------------------------------
+    local overrides = HelloUICharDB.overrides
+    if type(overrides) == "table" and next(overrides) ~= nil then
+        local who = (UnitName and UnitName("player")) or "Character"
+        local mine = copy(HelloUIDB.profiles[DEFAULT_PROFILE] or {})
+        for key, value in pairs(overrides) do
+            if isSettingKey(key) then mine[key] = value end
+        end
+        HelloUIDB.profiles[who] = HelloUIDB.profiles[who] or mine
+        HelloUICharDB.profile = who
+    end
+    HelloUICharDB.overrides = nil
+
+    -- A profile this character points at can have been deleted by another
+    -- character since. Fall back rather than resurrect it as a bag of defaults.
+    if not HelloUIDB.profiles[Config:ProfileName()] then
+        HelloUICharDB.profile = DEFAULT_PROFILE
+    end
+
+    -- Fill in and clean every profile, not just the active one: a key added in
+    -- this release has to reach the profiles the player is not currently on, or
+    -- switching to one hands back nils.
+    HelloUIDB.profiles[DEFAULT_PROFILE] = HelloUIDB.profiles[DEFAULT_PROFILE] or {}
+    for _, profile in pairs(HelloUIDB.profiles) do
+        applyDefaults(profile, accountDefaults)
+        dropRetired(profile)
+    end
     dropRetired(HelloUIDB)
-    dropRetired(HelloUICharDB.overrides)
 
     -- One-time: replace the profile-derived bar set with DragonflightUI's
     -- base one. applyDefaults only ever FILLS IN missing keys, so changing
@@ -221,7 +290,9 @@ function Config:Init()
     -- state; migrations have to.
     if not HelloUIDB.barsBaseV2 then
         HelloUIDB.barsBaseV2 = true
-        HelloUIDB.barsOff = copy(accountDefaults.barsOff)
+        for _, profile in pairs(HelloUIDB.profiles) do
+            profile.barsOff = copy(accountDefaults.barsOff)
+        end
     end
 
     -- Same trap, one setting over: every install that has ever logged in has
@@ -239,25 +310,109 @@ function Config:Init()
     -- alone - fixes nothing on the installs that have the problem.
     if not HelloUIDB.trackingAngleV2 then
         HelloUIDB.trackingAngleV2 = true
-        -- A literal, never accountDefaults: it names the historical value, not
-        -- the current default, and the two must not drift into each other.
-        if HelloUIDB.trackingAngle == 30 then
-            HelloUIDB.trackingAngle = accountDefaults.trackingAngle
+        for _, profile in pairs(HelloUIDB.profiles) do
+            -- A literal, never accountDefaults: it names the historical value,
+            -- not the current default, and the two must not drift together.
+            if profile.trackingAngle == 30 then
+                profile.trackingAngle = accountDefaults.trackingAngle
+            end
         end
     end
 end
 
 --------------------------------------------------------------------------
+-- Profiles
+--
+-- Settings live in HelloUIDB.profiles[name]; each character stores the name of
+-- the one it uses. Switching profile is switching which table every Get reads.
+--
+-- What deliberately does NOT live in a profile: the things HelloUI remembers
+-- about BLIZZARD's state - xpBarTextOriginal, proxyOriginals - and the
+-- migration latches. Those are memory of what the client looked like before we
+-- touched it, not preferences, and copying them into a profile would mean a
+-- profile switch could hand back the wrong original.
+--------------------------------------------------------------------------
+
+local function profiles()
+    HelloUIDB = HelloUIDB or {}
+    HelloUIDB.profiles = HelloUIDB.profiles or {}
+    return HelloUIDB.profiles
+end
+
+local function profileTable(name)
+    local all = profiles()
+    local p = all[name]
+    if not p then
+        p = {}
+        applyDefaults(p, accountDefaults)
+        all[name] = p
+    end
+    return p
+end
+
+function Config:ProfileName()
+    local name = HelloUICharDB and HelloUICharDB.profile
+    if type(name) ~= "string" or name == "" then return DEFAULT_PROFILE end
+    return name
+end
+
+function Config:Profile()
+    return profileTable(Config:ProfileName())
+end
+
+function Config:ProfileNames()
+    local names = {}
+    for name in pairs(profiles()) do names[#names + 1] = name end
+    table.sort(names)
+    return names
+end
+
+function Config:ProfileExists(name)
+    return profiles()[name] ~= nil
+end
+
+-- Characters on a profile can outlive the profile: one character deletes it,
+-- another is still pointing at the name. Resolving that at load rather than
+-- silently recreating an empty one is what stops a deleted profile coming back
+-- from the dead full of defaults.
+function Config:UseProfile(name)
+    if type(name) ~= "string" or name:match("^%s*$") then return false, "a profile needs a name" end
+    name = name:match("^%s*(.-)%s*$")
+    HelloUICharDB = HelloUICharDB or {}
+    profileTable(name)
+    HelloUICharDB.profile = name
+    return true, name
+end
+
+-- Copy, never a blank slate. "New profile" in most addons means "carry on from
+-- what I have and diverge", and a fresh set of defaults is one `/hui reset`
+-- away for anyone who wanted the other thing.
+function Config:CopyProfile(name)
+    if type(name) ~= "string" or name:match("^%s*$") then return false, "a profile needs a name" end
+    name = name:match("^%s*(.-)%s*$")
+    if Config:ProfileExists(name) then return false, ("there is already a profile called %s"):format(name) end
+    profiles()[name] = copy(Config:Profile())
+    HelloUICharDB.profile = name
+    return true, name
+end
+
+function Config:DeleteProfile(name)
+    if name == DEFAULT_PROFILE then return false, "the Default profile cannot be deleted" end
+    if not Config:ProfileExists(name) then return false, ("no profile called %s"):format(name) end
+    profiles()[name] = nil
+    if Config:ProfileName() == name then HelloUICharDB.profile = DEFAULT_PROFILE end
+    return true, name
+end
+
+--------------------------------------------------------------------------
 -- Reads
 --
--- One resolution rule, used by every module: this character's override if it
--- has one, otherwise the account value.
+-- One resolution rule, used by every module: whatever this character's profile
+-- says.
 --------------------------------------------------------------------------
 
 function Config:Get(key)
-    local o = HelloUICharDB and HelloUICharDB.overrides
-    if o and o[key] ~= nil then return o[key] end
-    return HelloUIDB and HelloUIDB[key]
+    return Config:Profile()[key]
 end
 
 function Config:GetTable(key)
@@ -281,59 +436,22 @@ end
 --------------------------------------------------------------------------
 
 function Config:Set(key, value)
-    HelloUIDB = HelloUIDB or {}
-    HelloUIDB[key] = value
+    Config:Profile()[key] = value
 end
 
-function Config:SetChar(key, value)
-    HelloUICharDB = HelloUICharDB or {}
-    HelloUICharDB.overrides = HelloUICharDB.overrides or {}
-    HelloUICharDB.overrides[key] = value
-end
-
-function Config:ClearChar(key)
-    local o = HelloUICharDB and HelloUICharDB.overrides
-    if o then o[key] = nil end
-end
-
-function Config:HasChar(key)
-    local o = HelloUICharDB and HelloUICharDB.overrides
-    return o ~= nil and o[key] ~= nil
-end
-
-function Config:HasAnyCharOverride()
-    local o = HelloUICharDB and HelloUICharDB.overrides
-    if not o then return false end
-    return next(o) ~= nil
-end
-
-function Config:CharOverrideList()
-    local o = HelloUICharDB and HelloUICharDB.overrides
-    if not o then return "none" end
-    local keys = {}
-    for k in pairs(o) do keys[#keys + 1] = k end
-    table.sort(keys)
-    if #keys == 0 then return "none" end
-    return table.concat(keys, ", ")
-end
-
-function Config:ResetAccount()
-    HelloUIDB = {}
-    applyDefaults(HelloUIDB, accountDefaults)
-    -- Reset already installs the base bar set, so the migration has nothing
-    -- left to do. Marking it done matters: without this the latch is gone and
-    -- the migration re-runs at the next login, wiping any bar the player
-    -- changed in between.
+-- Resets THIS profile, not the account. The other profiles are other
+-- characters' business.
+function Config:ResetProfile()
+    local name = Config:ProfileName()
+    local fresh = {}
+    applyDefaults(fresh, accountDefaults)
+    profiles()[name] = fresh
+    -- Both migrations have already run against everything on disk; leaving the
+    -- latches set stops a reset re-arming them to overwrite whatever gets
+    -- dialled in next. Same bug the barsBaseV2 comment records.
     HelloUIDB.barsBaseV2 = true
-    -- Same for the tracking angle, and for the same reason: a reset installs
-    -- the current default, so an unlatched migration would sit there waiting to
-    -- overwrite whatever the player dialled in afterwards - as long as they
-    -- happened to dial in 30.
     HelloUIDB.trackingAngleV2 = true
-end
-
-function Config:ResetChar()
-    HelloUICharDB = { overrides = {} }
+    return name
 end
 
 -- Defaults are handed out as copies. A caller that mutated the live default
@@ -350,80 +468,66 @@ function Config:DefaultKeys()
 end
 
 --------------------------------------------------------------------------
--- /hui char
+-- /hui profile
 --
--- The whole per-character story in one subcommand, because the only thing it
--- is ever used for is "this warrior wants Blizzard's bar 1 and stance bar
--- gone, everybody else keeps them".
+-- Everything the profile system needs from the command line, in the shape every
+-- other addon's profile UI has taught people to expect: see where you are, go
+-- somewhere else, branch off a copy, throw one away.
 --------------------------------------------------------------------------
 
-function Config:CharCommand(rest)
+function Config:ProfileCommand(rest)
     rest = rest or ""
     local sub, arg = rest:match("^(%S*)%s*(.-)$")
+    arg = arg and arg:match("^%s*(.-)%s*$") or ""
 
-    if sub == "clear" then
-        Config:ResetChar()
-        ns:ApplyAllWhenSafe()
-        ns:Print("character overrides cleared - back to the account layout")
-        return
+    local function report()
+        local names = Config:ProfileNames()
+        local current = Config:ProfileName()
+        local marked = {}
+        for _, name in ipairs(names) do
+            marked[#marked + 1] = (name == current) and ("|cffffd100" .. name .. "|r") or name
+        end
+        ns:Print("profile: |cffffd100%s|r", current)
+        ns:Print("  |cff808080all: %s|r", table.concat(marked, ", "))
     end
 
-    if sub == "barsoff" then
-        local function report()
-            local off = Config:GetTable("barsOff")
-            local list = {}
-            for id, v in pairs(off) do
-                if v then list[#list + 1] = id end
-            end
-            table.sort(list)
-            ns:Print("bars off here: %s%s",
-                #list > 0 and table.concat(list, ", ") or "none",
-                Config:HasChar("barsOff") and " |cff808080(character override)|r" or " |cff808080(account)|r")
-        end
-
-        if arg == "" then
-            report()
+    if sub == "use" or sub == "switch" then
+        if arg == "" then ns:Print("usage: /hui profile use <name>") return end
+        if not Config:ProfileExists(arg) then
+            -- Deliberately not created here. `use` on a typo silently making a
+            -- fresh profile of defaults is how you lose a set of settings and
+            -- think the addon broke; `new` is one word away.
+            ns:Print("|cffff8080no profile called %s|r - /hui profile new %s makes one", arg, arg)
             return
         end
-
-        -- Validate against the real bar table rather than accepting anything
-        -- that looks like a word. A typo used to be stored silently and then
-        -- reported back as if it had worked, which is the worst of both.
-        local valid = {}
-        for _, def in ipairs(ns.BARS or {}) do valid[def.id] = true end
-
-        local off = copy(Config:GetTable("barsOff"))
-        local unknown, touched = {}, {}
-        for id in arg:gmatch("[%w]+") do
-            if valid[id] then
-                off[id] = not off[id] and true or false
-                touched[#touched + 1] = id
-            else
-                unknown[#unknown + 1] = id
-            end
-        end
-
-        if #unknown > 0 then
-            ns:Print("|cffff8080unknown bar%s:|r %s", #unknown > 1 and "s" or "",
-                table.concat(unknown, ", "))
-            ns:Print("  |cff808080ids: bar1 bar2 bar3 bar4 bar5 bar6 bar7 bar8 stance pet|r")
-        end
-        if #touched == 0 then return end
-
-        Config:SetChar("barsOff", off)
+        Config:UseProfile(arg)
         ns:ApplyAllWhenSafe()
-        -- Report the bars, not the override key. This used to print
-        -- CharOverrideList(), which is the list of overridden SETTING names -
-        -- so it always said "barsOff" no matter which bars you had toggled.
-        report()
+        ns:Print("profile: switched to |cffffd100%s|r", arg)
+        ns:Print("  |cff808080run /hui layout if you want this profile's bar arrangement too|r")
+        if ns.Options and ns.Options.Refresh then ns.Options:Refresh() end
         return
     end
 
-    if Config:HasAnyCharOverride() then
-        ns:Print("overrides on this character: %s", Config:CharOverrideList())
-    else
-        ns:Print("no overrides on this character - using the account layout")
+    if sub == "new" or sub == "copy" then
+        local ok, err = Config:CopyProfile(arg)
+        if not ok then ns:Print("|cffff8080%s|r", err) return end
+        ns:ApplyAllWhenSafe()
+        ns:Print("profile: |cffffd100%s|r created from the one you were on, and now in use", arg)
+        if ns.Options and ns.Options.Refresh then ns.Options:Refresh() end
+        return
     end
-    ns:Print("usage: /hui char |cff808080[clear | barsoff <id ...>]|r")
-    ns:Print("  |cff808080ids: bar1 bar2 bar3 bar4 bar5 bar6 bar7 bar8 stance pet|r")
+
+    if sub == "delete" or sub == "remove" then
+        local ok, err = Config:DeleteProfile(arg)
+        if not ok then ns:Print("|cffff8080%s|r", err) return end
+        ns:ApplyAllWhenSafe()
+        ns:Print("profile: deleted |cffffd100%s|r - this character is on %s", arg, Config:ProfileName())
+        ns:Print("  |cff808080any other character still on it falls back to Default at its next login|r")
+        if ns.Options and ns.Options.Refresh then ns.Options:Refresh() end
+        return
+    end
+
+    report()
+    ns:Print("usage: /hui profile |cff808080[use <name> | new <name> | delete <name>]|r")
 end
+

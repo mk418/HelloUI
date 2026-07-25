@@ -96,27 +96,42 @@ chat frame's width and height. Drag and resize them there.
 /hui on | off         master switch
 /hui apply            re-apply everything
 /hui status           what each feature found on this client
-/hui reset            account settings back to defaults
-/hui char             show this character's overrides
-/hui char clear       drop them
-/hui char barsoff bar1 stance
-                      toggle bars off for THIS character only
+/hui reset            this profile's settings back to defaults
+/hui profile          which profile this character uses, and what else exists
+/hui profile use <name>
+                      switch this character to another profile
+/hui profile new <name>
+                      branch a copy off the current one and switch to it
+/hui profile delete <name>
 /hui layout           build the bar layout - or reset it back after you have
                       dragged things around
-/hui layout char      this character gets its own layout (character override)
-/hui layout account   this character follows the shared one again
-/hui layout status    is it there, is it active, which mode
+/hui layout status    is it there, is it active, which profile
 ```
 
-## Per-character overrides
+## Profiles
 
-47 characters shared one layout and exactly one diverged, so this is an
-exception list rather than a profile manager. Account settings apply everywhere;
-a character only differs where you have explicitly overridden a key.
+Every setting belongs to a **profile**, and each character picks which profile it
+uses. Fresh installs get one called `Default` and every character on it, which is
+the old behaviour — change something and it changes everywhere.
 
-The case it exists for: a warrior running HelloWarrior wants Blizzard's bar 1 and
-stance bar gone, because HelloWarrior binds its own ability grid to `1`–`7` and
-packs stance buttons into its header. Everyone else keeps them.
+When that stops being what you want, `/hui profile new Raiding` branches a copy
+off the one you are on and moves this character to it. Edit away; the characters
+still on `Default` are untouched. The dropdown in the options panel does the same
+thing.
+
+The **bar layout follows the profile**, so this is one decision rather than two:
+`Default` uses the Edit Mode layout named `HelloUI`, and a profile called
+`Raiding` uses `HelloUI - Raiding`. Blizzard caps layouts at five per type, which
+in practice caps how many profiles can each have their own arrangement.
+
+The case this exists for: a warrior running HelloWarrior wants Blizzard's bar 1
+and stance bar gone, because HelloWarrior binds its own ability grid to `1`–`7`
+and packs stance buttons into its header. Everyone else keeps them.
+
+Upgrading from a version before profiles: your account settings become `Default`,
+and any character that had overrides gets a profile named after itself, seeded
+with them. That is also what its Edit Mode layout was already called, so nothing
+moves underneath it.
 
 ```
 /hui char barsoff bar1 stance

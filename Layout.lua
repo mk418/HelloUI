@@ -67,20 +67,27 @@ local Config = ns.Config
 local BASE_NAME = "HelloUI"
 local MAX_PER_TYPE = 5
 
-local function perCharacter()
-    return Config:Get("layoutPerCharacter") and true or false
-end
-
+-- The Edit Mode layout follows the PROFILE, which is what makes "give this
+-- character its own layout" and "give this character its own settings" one
+-- decision instead of two that can disagree. Default keeps the bare name, so
+-- the layout everybody already has is the layout Default still points at.
+--
+-- The migration names a character's profile after the character, and the old
+-- per-character layout was "HelloUI - <character>" - so the name does not move
+-- underneath anyone either.
 local function layoutName()
-    if not perCharacter() then return BASE_NAME end
-    local name = UnitName("player")
-    return name and (BASE_NAME .. " - " .. name) or BASE_NAME
+    local profile = Config:ProfileName()
+    if not profile or profile == "Default" then return BASE_NAME end
+    return BASE_NAME .. " - " .. profile
 end
 
+-- Always an ACCOUNT layout, even for a named profile: a profile is not a
+-- character, and two characters sharing "Raiding" should share its layout too.
+-- A Character-type layout left over from the old per-character mode is still
+-- found by name and refreshed in place, so nobody ends up with two.
 local function layoutType()
     local T = Enum and Enum.EditModeLayoutType
     if not T then return 1 end
-    if perCharacter() then return T.Character or 2 end
     return T.Account or 1
 end
 
@@ -508,7 +515,7 @@ function Layout:Apply(silent)
         if sameType >= MAX_PER_TYPE then
             if not silent then
                 ns:Print("layout: |cffff8080you already have %d %s layouts|r - delete one in Edit Mode first",
-                    MAX_PER_TYPE, perCharacter() and "character" or "account")
+                    MAX_PER_TYPE, "account")
             end
             return false
         end
@@ -572,7 +579,8 @@ function Layout:Apply(silent)
     Layout.applied = true
     ns:Print("layout: %s the |cffffd100%s|r Edit Mode layout%s and switched to it",
         created and "created" or "reset", name,
-        perCharacter() and " |cff808080(this character only)|r" or "")
+        (Config:ProfileName() ~= "Default")
+            and (" |cff808080(profile: " .. Config:ProfileName() .. ")|r") or "")
     ns:Print("  |cff808080your own layouts are untouched - switch back any time in Edit Mode|r")
     return true
 end
@@ -746,8 +754,7 @@ function Layout:Status()
         ns:Print("  |cff808080positioned %d of %d systems%s|r", r.touched or 0, r.wanted or 0,
             (#(r.missing or {}) > 0) and (" - not found: " .. table.concat(r.missing, " ")) or "")
     end
-    ns:Print("  |cff808080mode: %s%s, prompt at login: %s|r",
-        perCharacter() and "per character" or "account-wide",
-        Config:HasChar("layoutPerCharacter") and " (character override)" or "",
+    ns:Print("  |cff808080profile: %s, prompt at login: %s|r",
+        Config:ProfileName(),
         tostring(Config:Enabled("askLayout") and true or false))
 end

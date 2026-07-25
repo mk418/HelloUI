@@ -42,6 +42,12 @@ read_globals = {
     "UnitName",
     "GetTrackingTexture",
     "StaticPopup_Show",
+    -- Dropdown menu API, as HelloBuffCap's options panel uses it.
+    "UIDropDownMenu_SetWidth",
+    "UIDropDownMenu_Initialize",
+    "UIDropDownMenu_CreateInfo",
+    "UIDropDownMenu_AddButton",
+    "UIDropDownMenu_SetText",
     "ShowUIPanel",
     "HideUIPanel",
 

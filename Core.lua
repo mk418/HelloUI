@@ -292,9 +292,8 @@ local function status()
             ns:SafeCall(name .. ":Status", m.Status, m)
         end
     end
-    if ns.Config:HasAnyCharOverride() then
-        ns:Print("this character has overrides: %s", ns.Config:CharOverrideList())
-    end
+    ns:Print("profile: |cffffd100%s|r |cff808080(of %d - /hui profile)|r",
+        ns.Config:ProfileName(), #ns.Config:ProfileNames())
 end
 
 SlashCmdList["HELLOUI"] = function(msg)
@@ -316,11 +315,11 @@ SlashCmdList["HELLOUI"] = function(msg)
     elseif cmd == "status" then
         status()
     elseif cmd == "reset" then
-        ns.Config:ResetAccount()
+        local name = ns.Config:ResetProfile()
         ns:ApplyAllWhenSafe()
-        ns:Print("account settings reset to defaults")
-    elseif cmd == "char" then
-        ns.Config:CharCommand(rest)
+        ns:Print("profile |cffffd100%s|r reset to defaults |cff808080(other profiles are untouched)|r", name)
+    elseif cmd == "profile" then
+        ns.Config:ProfileCommand(rest)
     elseif cmd == "clock" then
         local cx, cy = rest:match("^(-?%d+)%s+(-?%d+)$")
         if cx then
@@ -338,25 +337,19 @@ SlashCmdList["HELLOUI"] = function(msg)
             ns.Layout:Status()
         elseif rest == "probe" then
             ns.Layout:Probe()
-        elseif rest == "char" then
-            ns.Config:SetChar("layoutPerCharacter", true)
-            ns:Print("layout: this character now gets its own layout")
-            ns.Layout:Apply()
-        elseif rest == "account" then
-            ns.Config:ClearChar("layoutPerCharacter")
-            ns:Print("layout: this character follows the shared account layout again")
-            ns.Layout:Apply()
+        elseif rest == "char" or rest == "account" then
+            ns:Print("layout: the layout follows your profile now - |cff808080/hui profile new <name>|r " ..
+                "gives this character its own, |cff808080/hui profile use Default|r puts it back")
         else
             -- "reset" and no argument are the same thing: rebuild and
             -- overwrite, because Edit Mode saves dragging into the layout.
             ns.Layout:Reset()
         end
     else
-        ns:Print("usage: /hui |cff808080[config | on | off | apply | status | reset | char | layout]|r")
-        ns:Print("  |cff808080char clear|r         - drop this character's overrides")
-        ns:Print("  |cff808080char barsoff <id>|r  - hide bars on this character only")
+        ns:Print("usage: /hui |cff808080[config | on | off | apply | status | reset | profile | layout]|r")
+        ns:Print("  |cff808080profile|r           - which profile this character uses, and the rest")
+        ns:Print("  |cff808080profile new <name>|r - branch a copy off the current one")
         ns:Print("  |cff808080layout|r            - build/reset the Dragonflight bar layout")
-        ns:Print("  |cff808080layout char|r       - give this character its own layout")
         ns:Print("  |cff808080layout probe|r      - print where the bars actually are")
         ns:Print("  |cff808080minimapprobe|r      - the tracking button and clock's real state")
         ns:Print("  |cff808080clock <x> <y>|r     - nudge the clock digits in their box")

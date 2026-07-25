@@ -85,10 +85,9 @@ local function SettingCheck(suffix, label, anchor, relPoint, x, y, key, tooltip)
         tooltip)
 end
 
--- A key inside one of the nested tables (darkmodeAreas, barsOff). Writes to
--- the account table unless this character already has an override for the
--- whole table, in which case it writes there - so a per-character bar layout
--- stays per-character once you have made one.
+-- A key inside one of the nested tables (barsOff). Writes into the active
+-- profile's copy of that table - there is only one place it can go now that
+-- profiles replaced the account/override split.
 local function SubCheck(suffix, label, anchor, relPoint, x, y, tableKey, key, tooltip)
     return MakeCheck("HelloUIOpt" .. suffix, label, anchor, relPoint, x, y,
         function() return Config:GetTable(tableKey)[key] end,
@@ -100,26 +99,12 @@ local function SubCheck(suffix, label, anchor, relPoint, x, y, tableKey, key, to
             -- deleted key is indistinguishable from one never set, so
             -- unticking "bar 5" would come back ticked at the next login,
             -- forever.
-            local value = v and true or false
-            if Config:HasChar(tableKey) then
-                Config:Get(tableKey)[key] = value
-            else
-                HelloUIDB[tableKey] = HelloUIDB[tableKey] or {}
-                HelloUIDB[tableKey][key] = value
+            local t = Config:Get(tableKey)
+            if type(t) ~= "table" then
+                t = {}
+                Config:Set(tableKey, t)
             end
-        end,
-        tooltip)
-end
-
--- A per-character decision rather than an account one. Ticking writes a
--- character override; unticking clears it so the character follows the
--- account default again, which is exactly what the override machinery in
--- Config is for.
-local function CharCheck(suffix, label, anchor, relPoint, x, y, key, tooltip)
-    return MakeCheck("HelloUIOpt" .. suffix, label, anchor, relPoint, x, y,
-        function() return Config:Get(key) end,
-        function(v)
-            if v then Config:SetChar(key, true) else Config:ClearChar(key) end
+            t[key] = v and true or false
         end,
         tooltip)
 end
@@ -254,36 +239,103 @@ local askCheck = SettingCheck("AskLayout", "Offer the HelloUI layout at login",
     "Asks once per session, and only when the HelloUI layout is not already " ..
     "the active one - so saying yes retires the question for good.")
 
--- Per-character, not account-wide: this character opts out of the shared
--- layout without affecting any other.
-local perCharCheck = CharCheck("LayoutPerChar", "...but give THIS character its own",
-    askCheck, "BOTTOMLEFT", 12, -4, "layoutPerCharacter",
-    "Everyone shares one account-wide layout by default, matching the old " ..
-    "profile. Tick this on a character that wants its own copy, so tuning the " ..
-    "priest no longer moves the warrior's bars. Unticking returns this " ..
-    "character to the shared layout. Blizzard allows five layouts of each kind, " ..
-    "and switching leaves the old one in place - delete it in Edit Mode if you " ..
-    "want it gone.")
+--------------------------------------------------------------------------
+-- Profiles
+--
+-- Everything above writes into the profile this character uses; this is where
+-- you choose which one that is. The dropdown follows HelloBuffCap's, which is
+-- the family's only precedent for one and works on this client.
+--------------------------------------------------------------------------
 
-local resetBtn = CreateFrame("Button", nil, content, "UIPanelButtonTemplate")
-resetBtn:SetSize(140, 22)
-resetBtn:SetPoint("TOPLEFT", perCharCheck, "BOTTOMLEFT", 2, -18)
-resetBtn:SetText("Reset settings")
-resetBtn:SetScript("OnClick", function()
-    Config:ResetAccount()
-    Apply()
-    ns:Print("account settings reset to defaults")
-    Options:Refresh()
+local profileHeader = Header("Profile", askCheck, "BOTTOMLEFT", 2, -16)
+
+local profileNote = content:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+profileNote:SetPoint("TOPLEFT", profileHeader, "BOTTOMLEFT", 2, -6)
+profileNote:SetWidth(260)
+profileNote:SetJustifyH("LEFT")
+profileNote:SetSpacing(2)
+profileNote:SetText("Every setting on this panel belongs to the profile below. " ..
+    "Characters pick a profile each, so alts can differ - and the bar layout " ..
+    "follows it too.")
+
+local profileDrop = CreateFrame("Frame", "HelloUIOptProfile", content, "UIDropDownMenuTemplate")
+profileDrop:SetPoint("TOPLEFT", profileNote, "BOTTOMLEFT", -18, -4)
+if UIDropDownMenu_SetWidth then UIDropDownMenu_SetWidth(profileDrop, 170) end
+if UIDropDownMenu_Initialize then
+    UIDropDownMenu_Initialize(profileDrop, function(_, level)
+        for _, name in ipairs(Config:ProfileNames()) do
+            local info = UIDropDownMenu_CreateInfo()
+            info.text = name
+            info.checked = (name == Config:ProfileName())
+            info.func = function()
+                Config:UseProfile(name)
+                if UIDropDownMenu_SetText then UIDropDownMenu_SetText(profileDrop, name) end
+                Apply()
+                Options:Refresh()
+                ns:Print("profile: switched to |cffffd100%s|r", name)
+            end
+            UIDropDownMenu_AddButton(info, level)
+        end
+    end)
+end
+
+-- Naming a new profile needs a text box, and StaticPopup is the only one of
+-- those that does not mean building a dialog frame from scratch.
+StaticPopupDialogs = StaticPopupDialogs or {}
+StaticPopupDialogs["HELLOUI_NEW_PROFILE"] = {
+    text = "Name for the new profile\n\n|cff808080It starts as a copy of the one you are on, "
+        .. "and this character switches to it.|r",
+    button1 = "Create",
+    button2 = "Cancel",
+    hasEditBox = true,
+    maxLetters = 24,
+    OnAccept = function(self)
+        local box = self.editBox or (self.GetEditBox and self:GetEditBox())
+        local name = box and box:GetText() or ""
+        local ok, err = Config:CopyProfile(name)
+        if not ok then
+            ns:Print("|cffff8080%s|r", err)
+            return
+        end
+        Apply()
+        Options:Refresh()
+        ns:Print("profile: |cffffd100%s|r created and in use", name)
+    end,
+    timeout = 0, whileDead = true, hideOnEscape = true,
+}
+
+local newProfileBtn = CreateFrame("Button", nil, content, "UIPanelButtonTemplate")
+newProfileBtn:SetSize(150, 22)
+newProfileBtn:SetPoint("TOPLEFT", profileDrop, "BOTTOMLEFT", 20, -4)
+newProfileBtn:SetText("New from this one")
+newProfileBtn:SetScript("OnClick", function()
+    if StaticPopup_Show then StaticPopup_Show("HELLOUI_NEW_PROFILE") end
 end)
 
-local clearCharBtn = CreateFrame("Button", nil, content, "UIPanelButtonTemplate")
-clearCharBtn:SetSize(170, 22)
-clearCharBtn:SetPoint("LEFT", resetBtn, "RIGHT", 8, 0)
-clearCharBtn:SetText("Clear character overrides")
-clearCharBtn:SetScript("OnClick", function()
-    Config:ResetChar()
+local deleteProfileBtn = CreateFrame("Button", nil, content, "UIPanelButtonTemplate")
+deleteProfileBtn:SetSize(110, 22)
+deleteProfileBtn:SetPoint("LEFT", newProfileBtn, "RIGHT", 8, 0)
+deleteProfileBtn:SetText("Delete")
+deleteProfileBtn:SetScript("OnClick", function()
+    local name = Config:ProfileName()
+    local ok, err = Config:DeleteProfile(name)
+    if not ok then
+        ns:Print("|cffff8080%s|r", err)
+        return
+    end
     Apply()
-    ns:Print("character overrides cleared")
+    Options:Refresh()
+    ns:Print("profile: deleted |cffffd100%s|r - this character is on %s", name, Config:ProfileName())
+end)
+
+local resetBtn = CreateFrame("Button", nil, content, "UIPanelButtonTemplate")
+resetBtn:SetSize(190, 22)
+resetBtn:SetPoint("TOPLEFT", newProfileBtn, "BOTTOMLEFT", 0, -10)
+resetBtn:SetText("Reset this profile")
+resetBtn:SetScript("OnClick", function()
+    local name = Config:ResetProfile()
+    Apply()
+    ns:Print("profile |cffffd100%s|r reset to defaults", name)
     Options:Refresh()
 end)
 
@@ -340,15 +392,14 @@ function Options:Refresh()
         cb:SetChecked(cb.getValue() and true or false)
     end
 
+    if UIDropDownMenu_SetText then UIDropDownMenu_SetText(profileDrop, Config:ProfileName()) end
+
     local lines = {}
 
-    if Config:HasAnyCharOverride() then
-        lines[#lines + 1] = "This character overrides: |cffffd100" ..
-            Config:CharOverrideList() .. "|r. Everything else follows the account layout."
-    else
-        lines[#lines + 1] = "This character uses the account layout. " ..
-            "|cff808080/hui char barsoff bar1 stance|r overrides just the bars, here only."
-    end
+    local names = Config:ProfileNames()
+    lines[#lines + 1] = ("This character is on the |cffffd100%s|r profile, of %d. " ..
+        "|cff808080Everything on this panel, and the bar layout, belongs to it.|r")
+        :format(Config:ProfileName(), #names)
 
     -- What each module actually found on this client. Several of the frames
     -- involved could not be verified against a running client while this was
