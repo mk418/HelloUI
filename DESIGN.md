@@ -300,6 +300,17 @@ source and an assumption disagreed, the source won.
   The object fields are preferred anyway because Blizzard installs them
   deliberately (`ActionButtonTextOverlayContainerMixin:OnLoad`) and they don't
   depend on naming semantics.
+- **Alpha on button text needs no re-assertion at all.** Blizzard reaches those
+  two font strings through `Show`, `Hide`, `SetText` and `SetVertexColor` only.
+  A full-tree search finds no `SetAlpha` on an action button's `HotKey` or
+  `Name` anywhere — the only hits belong to the raid pullout buttons and the
+  commentator UI. So an alpha set once stays set, which is the real reason alpha
+  beats `Hide` here rather than merely a way to dodge a fight.
+
+  Corollary: do **not** hook `ActionBarActionButtonMixin.UpdateHotkeys` to
+  re-apply. `Mixin()` copies function references onto each button as it is
+  created, so hooking the mixin table afterwards reaches no existing button. It
+  would look like it worked and do nothing.
 - **No native text toggle.** A full-tree search for a keybind- or macro-text
   setting comes back empty. Blizzard's Action Bars panel offers per-bar
   visibility, Lock Action Bars and cooldown numbers; Edit Mode offers

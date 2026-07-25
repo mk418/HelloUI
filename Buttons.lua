@@ -44,8 +44,6 @@ local function macroOf(btn, name)
     return btn.Name or _G[name .. "Name"]
 end
 
-local applying = false
-
 local function applyToButton(btn, name)
     local hideKey = Config:Enabled("hideKeybindText")
     local hideMacro = Config:Enabled("hideMacroText")
@@ -58,57 +56,60 @@ local function applyToButton(btn, name)
 end
 
 function Buttons:Apply()
-    applying = true
+    local found = 0
     for _, def in ipairs(ns.BARS) do
         for i = 1, def.count do
             local name = def.buttons .. i
             local btn = _G[name]
-            if btn then applyToButton(btn, name) end
+            if btn then
+                applyToButton(btn, name)
+                found = found + 1
+            end
         end
     end
-    applying = false
+    Buttons.found = found
 end
 
 --------------------------------------------------------------------------
--- Re-assertion
+-- Re-assertion, and why there is almost none
 --
--- Blizzard rewrites the hotkey text whenever bindings change or a button's
--- action changes, and although it never touches alpha, a button that did not
--- exist at our first pass has to be caught. Hooking UpdateHotkeys covers
--- both: it is the one function that owns the text, and it runs per button.
+-- Nothing in Blizzard's interface ever calls SetAlpha on an action button's
+-- HotKey or Name. The whole tree was searched: the only SetAlpha calls on a
+-- font string called Name belong to the raid pullout buttons and the
+-- commentator UI, neither of which is an action button. Blizzard's action bar
+-- code reaches these two font strings through Show, Hide, SetText and
+-- SetVertexColor only - and none of those touch alpha.
 --
--- The `applying` guard is not for recursion (we never call UpdateHotkeys) -
--- it is so a full Apply() sweep does not re-enter this per button and do the
--- same work twice for every button on screen.
+-- So an alpha we set stays set, permanently, and the correct amount of
+-- re-assertion is zero. That is also why alpha was the right choice over
+-- Hide in the first place.
+--
+-- The events below are therefore pure insurance against a button that did not
+-- exist during the first pass. On Era every bar and every button is created at
+-- load, so in practice they never do anything - they are cheap, and the cost
+-- of being wrong about that is a visible keybind on a bar nobody asked for.
+--
+-- Deliberately NOT hooking ActionBarActionButtonMixin.UpdateHotkeys: Mixin()
+-- copies function references onto each button when it is created, so hooking
+-- the mixin table afterwards would not reach a single existing button. It
+-- would look like it worked and do nothing.
 --------------------------------------------------------------------------
 
 function Buttons:Init()
-    local mixin = _G["ActionBarActionButtonMixin"]
-    if mixin and mixin.UpdateHotkeys then
-        hooksecurefunc(mixin, "UpdateHotkeys", function(btn)
-            if applying then return end
-            local name = btn.GetName and btn:GetName()
-            if not name then return end
-            applyToButton(btn, name)
-        end)
-        Buttons.hooked = true
+    local function sweep(label)
+        return function() ns:SafeCall("Buttons:" .. label, Buttons.Apply, Buttons) end
     end
 
-    -- The stance and pet bars inherit the same button template but reach
-    -- their own update paths, and a binding change repaints every bar, so a
-    -- cheap whole-sweep on the binding event covers what the per-button hook
-    -- does not.
-    ns:On("UPDATE_BINDINGS", function() ns:SafeCall("Buttons:bindings", Buttons.Apply, Buttons) end)
-    ns:On("ACTIONBAR_SLOT_CHANGED", function() ns:SafeCall("Buttons:slot", Buttons.Apply, Buttons) end)
-    ns:On("UPDATE_SHAPESHIFT_FORMS", function() ns:SafeCall("Buttons:forms", Buttons.Apply, Buttons) end)
+    ns:On("UPDATE_BINDINGS", sweep("bindings"))
+    ns:On("UPDATE_SHAPESHIFT_FORMS", sweep("forms"))
     ns:On("UNIT_PET", function(unit)
-        if unit == "player" then ns:SafeCall("Buttons:pet", Buttons.Apply, Buttons) end
+        if unit == "player" then sweep("pet")() end
     end)
 end
 
 function Buttons:StatusText()
-    if not Buttons.hooked then
-        return "buttons: |cffffd100no UpdateHotkeys hook|r"
+    if (Buttons.found or 0) == 0 then
+        return "buttons: |cffff8080none found|r"
     end
     return nil
 end
@@ -126,7 +127,9 @@ function Buttons:Status()
             end
         end
     end
-    ns:Print("buttons: %d found, %d with keybind text, %d with macro text%s",
-        total, withHotkey, withMacro,
-        Buttons.hooked and "" or " |cffffd100(no UpdateHotkeys hook)|r")
+    ns:Print("buttons: %d found, %d with keybind text, %d with macro text",
+        total, withHotkey, withMacro)
+    ns:Print("  |cff808080keybind %s, macro %s|r",
+        Config:Enabled("hideKeybindText") and "hidden" or "shown",
+        Config:Enabled("hideMacroText") and "hidden" or "shown")
 end
