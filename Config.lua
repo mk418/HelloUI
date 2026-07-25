@@ -23,19 +23,27 @@ local accountDefaults = {
     hideKeybindText = true,
     hideMacroText   = true,
 
-    -- Bars.lua. Bar 4 was switched off on every character. The stance and pet
-    -- entries exist because a character running one of the class addons wants
-    -- them off too, but that is a per-character call rather than an
-    -- account-wide one - see the char override machinery below.
+    -- Bars.lua. One bar was switched off on every character - and mind the
+    -- numbering. The old profile called it "bar4", but DragonflightUI bound
+    -- its bar4 to MultiBarLeft, which the game itself calls bar 5
+    -- (PROXY_SHOW_ACTIONBAR_5). These ids follow Blizzard's numbering,
+    -- because that is what the labels in the game's own Action Bars options
+    -- say, so the same physical bar is bar5 here. See Bars.lua.
+    --
+    -- The stance and pet entries exist because a character running one of the
+    -- class addons wants them off too, but that is a per-character call
+    -- rather than an account-wide one - see the char override machinery below.
     barsOff = {
-        bar4 = true,
+        bar5 = true,
     },
 
-    -- StatusBars.lua. "Always show" here means the bar's text is permanently
-    -- readable instead of appearing only on mouseover. The bars themselves
-    -- were always visible; this was only ever about the numbers.
-    alwaysShowXPText  = true,
-    alwaysShowRepText = true,
+    -- StatusBars.lua. "Always show" means the bar text is permanently
+    -- readable instead of appearing only on mouseover; the bars themselves
+    -- were always visible. ONE setting, not the two the old profile had:
+    -- stock 1.15.9 gates both the XP and reputation bar through the same
+    -- ShouldBarTextBeDisplayed, so there is a single native switch covering
+    -- both and splitting it here would be a lie.
+    alwaysShowBarText = true,
 
     -- Player.lua. The only unit frame setting in the entire old profile.
     classColorPlayerHealth = true,
@@ -44,6 +52,10 @@ local accountDefaults = {
     -- old module's own defaults (0.4 grey everywhere except unit frames,
     -- which used 77/255 - close enough to the same intent that one value
     -- covers both, and the difference was invisible in play).
+    -- Two of the old profile's six areas are gone: `buffs` has no stock
+    -- target (1.15.9 aura buttons are anonymous pooled frames whose only
+    -- border is dispel-type colour) and `ui` was already a no-op in the old
+    -- module. See Darkmode.lua.
     darkmode = true,
     darkmodeDesaturate = true,
     darkmodeTint = { r = 0.4, g = 0.4, b = 0.4 },
@@ -51,20 +63,15 @@ local accountDefaults = {
         unitframes = true,
         minimap    = true,
         actionbars = true,
-        buffs      = true,
         castbar    = true,
-        ui         = true,
     },
 
-    -- Minimap.lua.
-    hideCalendarButton = true,
-    tuckMinimap = true,
-    -- Offsets for the tuck. The old +7 compensated for dead margin in
-    -- DragonflightUI's own ring art and does NOT transfer to Blizzard's, so
-    -- this starts at a flush 0/0 and is a slider in the options panel. See
-    -- DESIGN.md - the honest answer is that it has to be eyeballed in game.
-    minimapX = 0,
-    minimapY = 0,
+    -- Minimap.lua. On Era this button is the time-of-day sun/moon dial, not
+    -- a calendar - Classic Era loads GameTime_NoCalendar. There is no tuck
+    -- setting because stock 1.15.9 already anchors the minimap flush
+    -- top-right and MinimapCluster is an Edit Mode system; moving it is Edit
+    -- Mode's job.
+    hideTimeOfDay = true,
 
     -- Chat.lua. The size the old module pinned ChatFrame1 to.
     chatAnchor = true,

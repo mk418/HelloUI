@@ -83,8 +83,37 @@ end
 function ns:On(event, fn)
     if not ns.eventHandlers[event] then
         if not ns:EventExists(event) then return false end
+
+        -- Registered through pcall even though EventExists just said yes.
+        -- On this build "valid" and "registerable" have come apart for at
+        -- least one event: the client rejects RegisterEvent("MINIMAP_PING")
+        -- outright with `Attempt to register unknown event`, and Blizzard's
+        -- own minimap code now reaches it through RegisterEventCallback
+        -- instead. Without the pcall an unlucky event name throws at
+        -- file-load time and takes the whole addon down - which is precisely
+        -- the failure this guard exists to prevent.
+        local ok = pcall(ns.eventFrame.RegisterEvent, ns.eventFrame, event)
+        if not ok then
+            -- Callback-only events are a real category on 1.15.9 and have
+            -- their own registration path. The owner arrives as the first
+            -- argument, so it is stripped to match what ns:On handlers expect.
+            local isCallback = C_EventUtils and C_EventUtils.IsCallbackEvent
+                and C_EventUtils.IsCallbackEvent(event)
+            if not (isCallback and ns.eventFrame.RegisterEventCallback) then
+                return false
+            end
+            local okCb = pcall(ns.eventFrame.RegisterEventCallback, ns.eventFrame, event,
+                function(_owner, ...)
+                    local handlers = ns.eventHandlers[event]
+                    if not handlers then return end
+                    for i = 1, #handlers do
+                        ns:SafeCall("event " .. event, handlers[i], ...)
+                    end
+                end)
+            if not okCb then return false end
+        end
+
         ns.eventHandlers[event] = {}
-        ns.eventFrame:RegisterEvent(event)
     end
     table.insert(ns.eventHandlers[event], fn)
     return true
@@ -271,9 +300,18 @@ SlashCmdList["HELLOUI"] = function(msg)
         ns:Print("account settings reset to defaults")
     elseif cmd == "char" then
         ns.Config:CharCommand(rest)
+    elseif cmd == "chat" then
+        if rest == "save" then
+            ns.Chat:Capture()
+            ns:ApplyAllWhenSafe()
+        else
+            ns.Chat:Status()
+            ns:Print("  |cff808080/hui chat save|r - pin it to wherever you have dragged it")
+        end
     else
-        ns:Print("usage: /hui |cff808080[config | on | off | apply | status | reset | char]|r")
+        ns:Print("usage: /hui |cff808080[config | on | off | apply | status | reset | char | chat]|r")
         ns:Print("  |cff808080char clear|r - drop this character's overrides")
+        ns:Print("  |cff808080chat save|r  - pin the chat frame where it is now")
     end
 end
 
