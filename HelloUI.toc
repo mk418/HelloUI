@@ -1,0 +1,20 @@
+## Interface: 11509
+## Title: HelloUI
+## Notes: De-clutter the stock Classic Era interface - no art overhaul, no replacement frames.
+## Author: Drikk
+## Version: 0.1.0
+## SavedVariables: HelloUIDB
+## SavedVariablesPerCharacter: HelloUICharDB
+## X-License: MIT
+
+Core.lua
+Config.lua
+Buttons.lua
+Bars.lua
+StatusBars.lua
+Player.lua
+Darkmode.lua
+Minimap.lua
+Chat.lua
+Friends.lua
+Options.lua
