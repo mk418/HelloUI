@@ -15,6 +15,14 @@ local Config = ns.Config
 -- Everything is individually switchable, and `/hui reset` puts these back.
 --------------------------------------------------------------------------
 
+-- Six things are deliberately NOT here. Hiding the gryphons and bar backdrop,
+-- always-visible XP and reputation text, hiding the time-of-day dial,
+-- class-colouring the player health bar, yielding the cast bar to a sibling
+-- that draws its own, and the flat cast bar are what HelloUI IS. They were
+-- switches because everything started as one; a switch implies a decision worth
+-- making, and nobody was going to install this addon and then turn those off.
+-- They now run whenever the addon is enabled, so `enabled` is the only switch
+-- above them and `/hui off` still hands every one of them back.
 local accountDefaults = {
     enabled = true,
 
@@ -22,11 +30,6 @@ local accountDefaults = {
     -- single bar, with no exceptions anywhere.
     hideKeybindText = true,
     hideMacroText   = true,
-
-    -- The gryphons and the main bar backdrop. The old profile asked for both
-    -- (`gryphons = 'NONE'`, `hideArt = true`); on a stock client that is real
-    -- work rather than the no-op it looked like. See Bars.lua.
-    hideBarArt = true,
 
     -- With the bar backdrop gone, each button's own border is all that is
     -- left - and stock ships it at alpha 0.5, which reads as no border at
@@ -60,37 +63,11 @@ local accountDefaults = {
         bar8 = true,
     },
 
-    -- StatusBars.lua. "Always show" means the bar text is permanently
-    -- readable instead of appearing only on mouseover; the bars themselves
-    -- were always visible. ONE setting, not the two the old profile had:
-    -- stock 1.15.9 gates both the XP and reputation bar through the same
-    -- ShouldBarTextBeDisplayed, so there is a single native switch covering
-    -- both and splitting it here would be a lie.
-    alwaysShowBarText = true,
-
     -- Width of the XP/reputation bars, matched to the action bar stack: 12
     -- buttons at a 38px pitch, less the trailing padding. Edit Mode offers no
     -- width control for these - only a scale, which squashes the height - so
     -- this is set directly. 0 leaves Blizzard's 1024 alone.
     statusBarWidth = 454,
-
-    -- CastBar.lua. Switch Blizzard's player cast bar off while a sibling addon
-    -- is drawing its own - today that means HelloWarrior, whose cluster sits in
-    -- the same strip the layout parks the cast bar in. Through Blizzard's own
-    -- SetAndUpdateShowCastbar, the call the client itself uses when an overlay
-    -- bar replaces the player's, so there is nothing to fight and nothing to
-    -- re-assert. Off means Blizzard's bar always shows, overlap and all.
-    yieldCastBar = true,
-
-    -- And restyle the one that remains to match: Blizzard's border art off, a
-    -- flat backdrop behind the fill, the spell name to the left and a countdown
-    -- on the right - the look HelloWarrior's own bar uses. The fill texture is
-    -- already the same one on this client, so this is art removal plus two font
-    -- strings, not a replacement bar.
-    castBarStyle = true,
-
-    -- Player.lua. The only unit frame setting in the entire old profile.
-    classColorPlayerHealth = true,
 
     -- Darkmode.lua. Desaturate plus a flat grey tint, per area, matching the
     -- old module's own defaults (0.4 grey everywhere except unit frames,
@@ -109,13 +86,6 @@ local accountDefaults = {
         actionbars = true,
         castbar    = true,
     },
-
-    -- Minimap.lua. On Era this button is the time-of-day sun/moon dial, not
-    -- a calendar - Classic Era loads GameTime_NoCalendar. There is no tuck
-    -- setting because stock 1.15.9 already anchors the minimap flush
-    -- top-right and MinimapCluster is an Edit Mode system; moving it is Edit
-    -- Mode's job.
-    hideTimeOfDay = true,
 
     -- Three shipped defects in one 33-line Blizzard file, all covered by this
     -- one switch because they are all the same button: it is declared with no
@@ -227,11 +197,28 @@ local function copy(v)
     return out
 end
 
+-- Settings that became unconditional behaviour. Deleted from saved variables on
+-- sight rather than left to rot: an install that had ever ticked one carries the
+-- key forever otherwise, and a stale `hideBarArt = false` sitting in the file
+-- reads like a setting that stopped working rather than one that was retired.
+local RETIRED = {
+    "hideBarArt", "alwaysShowBarText", "hideTimeOfDay",
+    "classColorPlayerHealth", "yieldCastBar", "castBarStyle",
+}
+
+local function dropRetired(t)
+    if type(t) ~= "table" then return end
+    for _, key in ipairs(RETIRED) do t[key] = nil end
+end
+
 function Config:Init()
     HelloUIDB = HelloUIDB or {}
     HelloUICharDB = HelloUICharDB or {}
     applyDefaults(HelloUIDB, accountDefaults)
     applyDefaults(HelloUICharDB, charDefaults)
+
+    dropRetired(HelloUIDB)
+    dropRetired(HelloUICharDB.overrides)
 
     -- One-time: replace the profile-derived bar set with DragonflightUI's
     -- base one. applyDefaults only ever FILLS IN missing keys, so changing

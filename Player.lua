@@ -44,7 +44,7 @@ function Player:Apply()
     local bar = healthBar()
     if not bar then return end
 
-    if not Config:Enabled("classColorPlayerHealth") then
+    if not Config:Enabled() then
         if original then
             bar.lockColor = original.lockColor
             bar:SetStatusBarColor(original.r, original.g, original.b, original.a)
@@ -96,7 +96,7 @@ function Player:Status()
         ns:Print("player: |cffff8080PlayerFrameHealthBar not found|r")
         return
     end
-    if not Config:Enabled("classColorPlayerHealth") then
+    if not Config:Enabled() then
         ns:Print("player: health bar left to Blizzard")
         return
     end

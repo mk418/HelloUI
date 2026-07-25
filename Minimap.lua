@@ -65,7 +65,7 @@ local function applyTimeOfDay()
     local f = todFrame()
     if not f then return end
 
-    if Config:Enabled("hideTimeOfDay") then
+    if Config:Enabled() then
         f:Hide()
         return
     end
@@ -509,7 +509,7 @@ function Minimap_:Init()
     local f = todFrame()
     if f then
         hooksecurefunc(f, "Show", function(self)
-            if Config:Enabled("hideTimeOfDay") then self:Hide() end
+            if Config:Enabled() then self:Hide() end
         end)
         Minimap_.hookedShow = true
     end
@@ -611,7 +611,7 @@ function Minimap_:Status()
         return
     end
     ns:Print("minimap: time-of-day dial %s |cff808080(toggle hook=%s, show hook=%s)|r",
-        Config:Enabled("hideTimeOfDay") and "hidden" or "shown",
+        Config:Enabled() and "hidden" or "shown",
         tostring(Minimap_.hookedToggle or false), tostring(Minimap_.hookedShow or false))
     ns:Print("  |cff808080position is Edit Mode's job; size is set in the layout|r")
     local track = trackingFrame()

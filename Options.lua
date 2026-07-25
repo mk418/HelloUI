@@ -150,7 +150,19 @@ subtitle:SetJustifyH("LEFT")
 subtitle:SetText("De-clutters the stock interface. No art overhaul, no replacement frames - " ..
     "position is Blizzard Edit Mode's job.")
 
-local enabledCheck = SettingCheck("Enabled", "Enable HelloUI", subtitle, "BOTTOMLEFT", -2, -14, "enabled",
+-- What the addon does without being asked. Listed rather than left implicit:
+-- these were checkboxes until they were not, and a panel that simply stopped
+-- mentioning them would read as features that had been dropped.
+local alwaysNote = content:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+alwaysNote:SetPoint("TOPLEFT", subtitle, "BOTTOMLEFT", 0, -6)
+alwaysNote:SetWidth(560)
+alwaysNote:SetJustifyH("LEFT")
+alwaysNote:SetSpacing(2)
+alwaysNote:SetText("Always on: gryphons and bar backdrop hidden, XP and reputation text " ..
+    "always visible, time-of-day dial hidden, class-coloured player health, and a flat " ..
+    "cast bar that steps aside when a sibling addon draws its own.")
+
+local enabledCheck = SettingCheck("Enabled", "Enable HelloUI", alwaysNote, "BOTTOMLEFT", -2, -14, "enabled",
     "Master switch. Turning this off stops HelloUI re-asserting anything, " ..
     "but a /reload is what fully restores Blizzard's own state.")
 
@@ -164,14 +176,8 @@ local keybindCheck = SettingCheck("Keybind", "Hide keybind text", barsHeader, "B
 local macroCheck = SettingCheck("Macro", "Hide macro name text", keybindCheck, "BOTTOMLEFT", 0, -4,
     "hideMacroText")
 
-local barArtCheck = SettingCheck("BarArt", "Hide the gryphons and bar backdrop",
-    macroCheck, "BOTTOMLEFT", 0, -4, "hideBarArt",
-    "The same two frames Blizzard's own Edit Mode 'Hide Bar Art' drives. " ..
-    "Takes the latency strip with it, exactly as Blizzard's setting does; " ..
-    "the micro menu and bags are unaffected.")
-
 local borderCheck = SettingCheck("Borders", "Solid borders on every button",
-    barArtCheck, "BOTTOMLEFT", 0, -4, "buttonBorders",
+    macroCheck, "BOTTOMLEFT", 0, -4, "buttonBorders",
     "Blizzard ships the button border at half alpha because it was meant to " ..
     "sit on the bar backdrop. With the backdrop hidden that reads as no border " ..
     "at all, so this takes it to full alpha - Blizzard's own texture, just " ..
@@ -210,38 +216,12 @@ local stanceCheck = SubCheck("BarOffstance", "Stance", barChecks[1], "TOPLEFT",
 SubCheck("BarOffpet", "Pet", stanceCheck, "TOPLEFT",
     80, 0, "barsOff", "pet", BAR_TOOLTIP)
 
-local statusHeader = Header("Status bars", stanceCheck, "BOTTOMLEFT", 2, -14)
-
--- One checkbox, not two. Stock 1.15.9 runs the XP bar and the reputation bar
--- through the same ShouldBarTextBeDisplayed, so there is a single native
--- switch behind both and offering two would be a lie.
-local barTextCheck = SettingCheck("BarText", "XP and reputation bar text always visible",
-    statusHeader, "BOTTOMLEFT", -2, -8, "alwaysShowBarText",
-    "Otherwise the numbers only appear when you mouse over the bar. This is " ..
-    "Blizzard's own xpBarText setting, and it covers both bars together.")
-
-local unitHeader = Header("Unit frames", barTextCheck, "BOTTOMLEFT", 2, -14)
-
-local classColorCheck = SettingCheck("ClassColor", "Class-colour the player health bar",
-    unitHeader, "BOTTOMLEFT", -2, -8, "classColorPlayerHealth")
-
-local castCheck = SettingCheck("CastBar", "Hide the cast bar when a sibling draws one",
-    classColorCheck, "BOTTOMLEFT", 0, -4, "yieldCastBar",
-    "HelloWarrior draws its own cast bar at the top of its cluster, in the " ..
-    "same strip this layout parks Blizzard's in. While it is on screen, " ..
-    "Blizzard's is switched off through the client's own setting for it.")
-
--- No chat controls. ChatFrame1 inherits EditModeChatFrameSystemTemplate on
--- 1.15.9, so its size and position belong to Edit Mode for exactly the reasons
--- the minimap's do.
-local castStyleCheck = SettingCheck("CastStyle", "Flat cast bar (no border art, with a timer)",
-    castCheck, "BOTTOMLEFT", 12, -4, "castBarStyle",
-    "Matches HelloWarrior's: Blizzard's border art hidden, a flat backdrop, the " ..
-    "spell name on the left and a countdown on the right. The bar's size and " ..
-    "position stay Edit Mode's.")
+-- No "Status bars" or "Unit frames" sections any more: the XP/reputation text
+-- and the class-coloured health bar are unconditional now, and neither section
+-- had anything else in it.
 
 local chatNote = content:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
-chatNote:SetPoint("TOPLEFT", castStyleCheck, "BOTTOMLEFT", 4, -10)
+chatNote:SetPoint("TOPLEFT", stanceCheck, "BOTTOMLEFT", 2, -14)
 chatNote:SetWidth(260)
 chatNote:SetJustifyH("LEFT")
 chatNote:SetSpacing(2)
@@ -279,15 +259,8 @@ end
 
 local minimapHeader = Header("Minimap", areaChecks[#areaChecks], "BOTTOMLEFT", 2, -14)
 
--- Not "calendar": Classic Era loads GameTime_NoCalendar, so this button is
--- the time-of-day dial and has no calendar behind it.
-local todCheck = SettingCheck("TimeOfDay", "Hide the time-of-day dial",
-    minimapHeader, "BOTTOMLEFT", -2, -8, "hideTimeOfDay",
-    "The sun/moon icon on the minimap ring. On Classic Era it is not a " ..
-    "calendar button - it has no click action at all.")
-
 local minimapNote = content:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
-minimapNote:SetPoint("TOPLEFT", todCheck, "BOTTOMLEFT", 4, -4)
+minimapNote:SetPoint("TOPLEFT", minimapHeader, "BOTTOMLEFT", 2, -8)
 minimapNote:SetWidth(260)
 minimapNote:SetJustifyH("LEFT")
 minimapNote:SetSpacing(2)

@@ -70,7 +70,15 @@ ships in the client.
 
 ## Current scope
 
-Twelve features, each independently toggleable. Three changes from the first
+Twelve features. Six are switches; the other six are simply what the addon does
+— hiding the gryphons and bar backdrop, always-visible XP and reputation text,
+hiding the time-of-day dial, class-colouring the player health bar, yielding the
+cast bar to a sibling that draws its own, and the flat cast bar. Those started as
+settings because everything did, and a switch implies a decision worth making:
+nobody installs this and then turns the de-clutter off. They run whenever the
+addon is enabled, `/hui off` still hands every one of them back, and their keys
+are deleted from saved variables on sight so a stale `false` cannot read as a
+setting that broke. Three changes from the first
 count: pinning the chat frame turned out to belong to Edit Mode, for the same
 reason the minimap tuck did (see *Out of scope*); hiding the main bar art
 turned out to be real work rather than the no-op it first looked like; and the

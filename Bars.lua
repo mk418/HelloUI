@@ -246,7 +246,7 @@ local function hideArt()
 end
 
 local function applyBarArt()
-    if Config:Enabled("hideBarArt") then
+    if Config:Enabled() then
         hideArt()
         return
     end
@@ -273,7 +273,7 @@ function Bars:Init()
         -- table afterwards reaches no existing frame - the mistake that made
         -- the old UpdateHotkeys hook silently inert.
         hooksecurefunc(bar, "UpdateEndCaps", function()
-            if Config:Enabled("hideBarArt") then hideArt() end
+            if Config:Enabled() then hideArt() end
         end)
         Bars.hookedEndCaps = true
     end
@@ -324,7 +324,7 @@ function Bars:Status()
     end
     local menuBar, endCaps = artFrames()
     ns:Print("bar art: %s |cff808080(MainMenuBar=%s, EndCaps=%s, hook=%s)|r",
-        Config:Enabled("hideBarArt") and "hidden" or "shown",
+        Config:Enabled() and "hidden" or "shown",
         menuBar and tostring(menuBar:IsShown()) or "missing",
         endCaps and tostring(endCaps:IsShown()) or "missing",
         tostring(Bars.hookedEndCaps or false))

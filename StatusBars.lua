@@ -67,7 +67,7 @@ local function setCVar(value)
 end
 
 function StatusBars:Apply()
-    local want = Config:Enabled("alwaysShowBarText")
+    local want = Config:Enabled()
 
     local current = getCVar()
     if current == nil then return end

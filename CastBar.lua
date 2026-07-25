@@ -242,7 +242,7 @@ function CastBar:Apply()
     local f = playerBar()
     if not f then return end
 
-    if Config:Enabled("castBarStyle") then
+    if Config:Enabled() then
         applyStyle(f)
         CastBar.styled = true
     else
@@ -250,7 +250,7 @@ function CastBar:Apply()
         CastBar.styled = false
     end
 
-    local sibling = Config:Enabled("yieldCastBar") and siblingBar() or nil
+    local sibling = Config:Enabled() and siblingBar() or nil
 
     -- Only ever written when it needs to change, and the previous value is not
     -- remembered: `showCastbar` is true for every frame Blizzard ships except
@@ -289,7 +289,7 @@ function CastBar:Init()
     -- bar with the border inexplicably back rather than like Blizzard's own.
     if f.SetLook then
         hooksecurefunc(f, "SetLook", function(self)
-            if Config:Enabled("castBarStyle") then
+            if Config:Enabled() then
                 ns:SafeCall("CastBar:relook", applyStyle, self)
             end
         end)
@@ -300,7 +300,7 @@ function CastBar:Init()
     -- re-applies a per-bar-type colour on every cast, channel and interrupt.
     if f.UpdateBarFillTexture then
         hooksecurefunc(f, "UpdateBarFillTexture", function(self)
-            if Config:Enabled("castBarStyle") then
+            if Config:Enabled() then
                 self:SetStatusBarColor(GOLD[1], GOLD[2], GOLD[3])
             end
         end)
@@ -330,7 +330,7 @@ function CastBar:Status()
         ns:Print("cast bar: |cffff8080PlayerCastingBarFrame has no SetAndUpdateShowCastbar|r")
         return
     end
-    if not Config:Enabled("yieldCastBar") then
+    if not Config:Enabled() then
         ns:Print("cast bar: Blizzard's, always |cff808080(yielding is switched off)|r")
         return
     end

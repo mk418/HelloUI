@@ -35,6 +35,11 @@ text permanently readable. See `DESIGN.md` for the evidence and the reasoning.
   mouseover-only. This is Blizzard's `xpBarText` setting, and it covers both
   bars together.
 - **Class-colours the player health bar.**
+- **A flat cast bar** — Blizzard's border art off, the spell name on the left and
+  a countdown on the right, which the client itself has no region for. And when a
+  sibling addon draws its own cast bar (HelloWarrior puts one at the top of its
+  cluster, in the same strip), Blizzard's is switched off through the client's own
+  setting for exactly that case, so the two never draw through each other.
 - **Darkmode** — desaturates and tints Blizzard's frame art across unit frames,
   the minimap, action bar art and cast bars.
 - **Puts the tracking button back on the minimap.** On Classic Era Blizzard
@@ -66,6 +71,11 @@ text permanently readable. See `DESIGN.md` for the evidence and the reasoning.
 
 Defaults reproduce the layout that was already in use, so a fresh install should
 look like the thing it replaced rather than a blank slate.
+
+Six of those are simply what the addon is, and have no switch: the gryphons and
+bar backdrop, the XP and reputation text, the time-of-day dial, the class-coloured
+health bar, and both cast bar behaviours. `/hui off` still hands all of them back.
+Everything else in the panel is a checkbox.
 
 ## What it deliberately doesn't do
 

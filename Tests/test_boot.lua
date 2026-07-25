@@ -1486,8 +1486,10 @@ do
     local lp, _, _, lx = pcb.Text:GetPoint(1)
     ok(lp == "LEFT" and lx == 4, "and stays anchored inside the bar, not 5 above its top")
 
-    -- Switchable and restorable, like everything else here.
-    ns.Config:Set("castBarStyle", false)
+    -- Restorable. The style is not a setting of its own any more - it is what
+    -- the addon does - so the master switch is what turns it off, and /hui off
+    -- must still hand Blizzard's own bar back intact.
+    ns.Config:Set("enabled", false)
     ns:ApplyAll()
     eq(pcb.Border:GetTexture(), "Interface\\CastingBar\\UI-CastingBar-Border",
         "border art handed back when switched off")
@@ -1497,13 +1499,13 @@ do
     ok(rp == "CENTER" and rx == 0, "and the spell name re-centred")
     eq(select(1, pcb:GetStatusBarColor()), 1, "with Blizzard's own colour recomputed, not remembered")
     eq(pcb.Text:GetFontObject(), "GameFontHighlight", "and Blizzard's own font handed back")
-    -- And the re-assertion hook has to respect the switch too: a SetLook while the
-    -- style is off must leave Blizzard's own look alone rather than quietly
-    -- restyling behind the setting's back.
+    -- And the re-assertion hook has to respect it too: a SetLook while HelloUI is
+    -- off must leave Blizzard's own look alone rather than quietly restyling
+    -- behind the switch's back.
     pcb:SetLook("CLASSIC")
     eq(pcb.Border:GetTexture(), "Interface\\CastingBar\\UI-CastingBar-Border",
         "and a later SetLook does not restyle while switched off")
-    ns.Config:Set("castBarStyle", true)
+    ns.Config:Set("enabled", true)
     ns:ApplyAll()
     eq(pcb.Border:GetTexture(), nil, "and restyled when switched back on")
     -- Asserted after the off/on cycle on purpose: a texture is created shown, so
@@ -1541,11 +1543,12 @@ do
     ns:ApplyAll()
     eq(pcb.showCastbar, false, "and yielded again when it comes back")
 
-    -- Switchable, like every other feature here.
-    ns.Config:Set("yieldCastBar", false)
+    -- Yielding is unconditional behaviour now, so the master switch is the only
+    -- way off - and it must hand Blizzard's bar back.
+    ns.Config:Set("enabled", false)
     ns:ApplyAll()
-    eq(pcb.showCastbar, true, "restored when the setting is off")
-    ns.Config:Set("yieldCastBar", true)
+    eq(pcb.showCastbar, true, "restored when HelloUI is switched off")
+    ns.Config:Set("enabled", true)
     ns:ApplyAll()
     eq(pcb.showCastbar, false, "and yielded again when it is back on")
 
@@ -1724,6 +1727,53 @@ ns:ApplyAll()
 eq(settingValues["PROXY_SHOW_ACTIONBAR_3"], true, "and re-enabling re-applies")
 settingValues["PROXY_SHOW_ACTIONBAR_3"] = true
 
+-- Six settings became unconditional behaviour. Two things have to hold: the keys
+-- are gone from saved variables even on an install that had them, and the
+-- behaviour they used to gate now runs off the master switch alone.
+do
+    local RETIRED = { "hideBarArt", "alwaysShowBarText", "hideTimeOfDay",
+                      "classColorPlayerHealth", "yieldCastBar", "castBarStyle" }
+
+    -- An install that had ticked every one of them, including two set to false.
+    for _, key in ipairs(RETIRED) do HelloUIDB[key] = false end
+    HelloUICharDB.overrides.castBarStyle = false
+    ns.Config:Init()
+    local left = {}
+    for _, key in ipairs(RETIRED) do
+        if HelloUIDB[key] ~= nil then left[#left + 1] = key end
+        if HelloUICharDB.overrides[key] ~= nil then left[#left + 1] = key .. " (char)" end
+    end
+    ok(#left == 0, ("retired settings are cleared out of saved variables%s"):format(
+        #left > 0 and (" - left " .. table.concat(left, ", ")) or ""))
+
+    -- And a stored `false` must not switch the behaviour off any more, which is
+    -- the whole point: these run because the addon is on.
+    --
+    -- Every target is first put into the WRONG state by hand. Asserting the
+    -- right state without doing that passes on leftovers from an earlier apply -
+    -- which is exactly how the bar-art check went green against a version still
+    -- reading the retired key.
+    mainMenuBar:SetShown(true)
+    cvars.xpBarText = "0"
+    _G.GameTimeFrame:Show()
+    healthBar.lockColor = nil
+    pcb.Border:SetTexture("Interface\\CastingBar\\UI-CastingBar-Border")
+    ns:ApplyAll()
+    eq(mainMenuBar:IsShown(), false, "bar art still hidden despite a stale false")
+    eq(cvars.xpBarText, "1", "XP text still forced despite a stale false")
+    eq(_G.GameTimeFrame:IsShown(), false, "dial still hidden despite a stale false")
+    eq(healthBar.lockColor, true, "health bar still class-coloured despite a stale false")
+    eq(pcb.Border:GetTexture(), nil, "cast bar still restyled despite a stale false")
+
+    -- No checkbox left behind for any of them.
+    local boxes = {}
+    for _, suffix in ipairs({ "BarArt", "BarText", "TimeOfDay", "ClassColor", "CastBar", "CastStyle" }) do
+        if _G["HelloUIOpt" .. suffix] then boxes[#boxes + 1] = suffix end
+    end
+    ok(#boxes == 0, ("and no checkbox survives for them%s"):format(
+        #boxes > 0 and (" - found " .. table.concat(boxes, ", ")) or ""))
+end
+
 -- The options panel outgrew the Settings canvas - which does not clip, so the
 -- last three controls drew over the game instead. Everything lives in a scroll
 -- child now, and the way that regresses is somebody adding a widget parented to
@@ -1831,21 +1881,21 @@ eq(HelloUIDB.xpBarTextOriginal, "0", "the player's original is persisted")
 ns.Config:Init()
 ns:ApplyAll()
 eq(HelloUIDB.xpBarTextOriginal, "0", "the original survives a reload")
-ns.Config:Set("alwaysShowBarText", false)
+ns.Config:Set("enabled", false)
 ns:ApplyAll()
 eq(cvars.xpBarText, "0", "disabling restores the player's value, not ours")
-ns.Config:Set("alwaysShowBarText", true)
+ns.Config:Set("enabled", true)
 ns:ApplyAll()
 
 -- The time-of-day dial must not be Shown while the minimap itself is hidden.
 _G.Minimap:Hide()
-ns.Config:Set("hideTimeOfDay", false)
+ns.Config:Set("enabled", false)
 ns:ApplyAll()
 eq(_G.GameTimeFrame:IsShown(), false, "dial stays hidden while the minimap is toggled away")
 _G.Minimap:Show()
 ns:ApplyAll()
 eq(_G.GameTimeFrame:IsShown(), true, "dial comes back with the minimap")
-ns.Config:Set("hideTimeOfDay", true)
+ns.Config:Set("enabled", true)
 ns:ApplyAll()
 
 -- Friends: the scroll frame is reached by its global name. If this regresses
