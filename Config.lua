@@ -82,6 +82,13 @@ local accountDefaults = {
     -- re-assert. Off means Blizzard's bar always shows, overlap and all.
     yieldCastBar = true,
 
+    -- And restyle the one that remains to match: Blizzard's border art off, a
+    -- flat backdrop behind the fill, the spell name to the left and a countdown
+    -- on the right - the look HelloWarrior's own bar uses. The fill texture is
+    -- already the same one on this client, so this is art removal plus two font
+    -- strings, not a replacement bar.
+    castBarStyle = true,
+
     -- Player.lua. The only unit frame setting in the entire old profile.
     classColorPlayerHealth = true,
 

@@ -387,6 +387,17 @@ the addon is inert on non-Warriors, and a Priest with it installed must not lose
 their cast bar. Two named globals, read-only, no reciprocation — HelloWarrior
 does not know this file exists.
 
+**The cast bar is restyled, not replaced.** Blizzard's Classic-style bar already
+uses the same fill texture HelloWarrior's does (`CastingBarMixin:UpdateBarFillTexture`
+sets `Interface\TargetingFrame\UI-StatusBar` on that path), so matching the family
+look is the `hideBarArt` pattern: hide the 256x64 border and its flash, put a flat
+colour behind the fill, move the spell name left. The countdown is the one added
+thing, because this build has no `CastTimeText` at all — `UpdateCastTimeTextShown`
+opens with `if not self.CastTimeText then return end` and the Classic template
+declares none. The colour is the only part needing re-assertion:
+`UpdateBarFillTexture` re-applies a per-bar-type colour on every cast, hooked on
+the instance. Size and position stay Edit Mode's.
+
 **Button text stripping enumerates Blizzard's bars by name.** Never a global
 button sweep, and never "blank every FontString on every button". HelloWarrior
 paints its own compact hotkey label onto its buttons as `btn._hwKeyLabel` (a

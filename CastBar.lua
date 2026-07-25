@@ -45,6 +45,135 @@ local Config = ns.Config
 -- sibling's visibility every frame, which is a much worse trade.
 --------------------------------------------------------------------------
 
+--------------------------------------------------------------------------
+-- The flat style
+--
+-- HelloWarrior's cast bar reads better than Blizzard's, and almost all of the
+-- difference is art rather than shape: the fill texture is ALREADY the same one
+-- (CastingBarMixin:UpdateBarFillTexture sets Interface\TargetingFrame\UI-StatusBar
+-- on the classic-style path), so what is left is the 256x64 border wrapped
+-- around a 195x13 bar, a centred spell name, and no countdown.
+--
+-- So this is the hideBarArt pattern, not a reimplementation: hide Blizzard's
+-- border, put a flat backdrop behind the fill, move the name to the left and add
+-- the countdown the frame does not have. No shipped textures - the backdrop is a
+-- solid colour and everything else is Blizzard's own.
+--
+-- THE COUNTDOWN HAS TO BE OURS. CastingBarMixin:UpdateCastTimeTextShown opens
+-- with `if not self.CastTimeText then return end`, and the Classic template
+-- declares no such region - Enum.EditModeCastBarSetting.ShowCastTime exists but
+-- the Classic preset does not carry it either. So the timer is a FontString of
+-- ours fed from the mixin's own self.value / self.maxValue.
+--
+-- THE COLOUR NEEDS RE-ASSERTING, unlike everything else here. UpdateBarFillTexture
+-- re-applies a per-bar-type colour on every cast and every state change, so a
+-- colour set once is gone by the next spell. Hooked on the INSTANCE - Mixin()
+-- copies the method onto the frame, so hooking the mixin table would reach
+-- nothing, the same trap StatusBars documents.
+--------------------------------------------------------------------------
+
+local GOLD = { 0.85, 0.70, 0.30 }  -- HelloWarrior's, so the two match exactly
+
+local saved = {}
+
+local function remember(f)
+    if saved[f] then return end
+    -- Spelled out rather than `f.Text and f.Text:GetPoint(1)`: `and` truncates a
+    -- multiple return to its first value, so that form silently records the
+    -- point and drops the other four, and the restore path would put the spell
+    -- name back with no offsets at all.
+    local point, rel, relPoint, x, y
+    if f.Text and f.Text.GetPoint then
+        point, rel, relPoint, x, y = f.Text:GetPoint(1)
+    end
+    saved[f] = {
+        border = f.Border and f.Border:IsShown(),
+        shield = f.BorderShield and f.BorderShield:IsShown(),
+        flash = f.Flash and f.Flash:IsShown(),
+        textPoint = point, textRel = rel, textRelPoint = relPoint,
+        textX = x, textY = y,
+        justify = f.Text and f.Text.GetJustifyH and f.Text:GetJustifyH(),
+    }
+end
+
+local function ensureParts(f)
+    if not f.HelloUIBackdrop and f.CreateTexture then
+        local bg = f:CreateTexture(nil, "BACKGROUND")
+        bg:SetAllPoints()
+        bg:SetColorTexture(0, 0, 0, 0.55)
+        f.HelloUIBackdrop = bg
+    end
+    if not f.HelloUITimer and f.CreateFontString then
+        local timer = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        timer:SetPoint("RIGHT", f, "RIGHT", -4, 0)
+        f.HelloUITimer = timer
+    end
+end
+
+-- Fed from the mixin's own numbers rather than a second read of the cast API:
+-- self.value and self.maxValue are what the bar is drawing, so the digits cannot
+-- disagree with the fill.
+local function updateTimer(f)
+    local timer = f.HelloUITimer
+    if not timer then return end
+    if not (f.value and f.maxValue) or not f:IsShown() then
+        timer:SetText("")
+        return
+    end
+    local remaining = f.channeling and f.value or (f.maxValue - f.value)
+    if remaining < 0 then remaining = 0 end
+    timer:SetText(("%.1f"):format(remaining))
+end
+
+local function applyStyle(f)
+    remember(f)
+    ensureParts(f)
+
+    if f.Border then f.Border:Hide() end
+    if f.BorderShield then f.BorderShield:Hide() end
+    -- The flash is the same 256x64 border shape lighting up on a completed cast.
+    -- Kept hidden with the border, or a successful cast draws a glowing outline
+    -- around art that is no longer there.
+    if f.Flash then f.Flash:Hide() end
+
+    if f.HelloUIBackdrop then f.HelloUIBackdrop:Show() end
+    if f.HelloUITimer then f.HelloUITimer:Show() end
+
+    if f.Text then
+        f.Text:ClearAllPoints()
+        f.Text:SetPoint("LEFT", f, "LEFT", 4, 0)
+        f.Text:SetPoint("RIGHT", f, "RIGHT", -40, 0)
+        if f.Text.SetJustifyH then f.Text:SetJustifyH("LEFT") end
+    end
+
+    f:SetStatusBarColor(GOLD[1], GOLD[2], GOLD[3])
+end
+
+local function restoreStyle(f)
+    local s = saved[f]
+    if not s then return end
+
+    if f.Border and s.border then f.Border:Show() end
+    if f.BorderShield and s.shield then f.BorderShield:Show() end
+    if f.Flash and s.flash then f.Flash:Show() end
+
+    if f.HelloUIBackdrop then f.HelloUIBackdrop:Hide() end
+    if f.HelloUITimer then f.HelloUITimer:Hide() end
+
+    if f.Text and s.textPoint then
+        f.Text:ClearAllPoints()
+        f.Text:SetPoint(s.textPoint, s.textRel, s.textRelPoint, s.textX, s.textY)
+        if f.Text.SetJustifyH and s.justify then f.Text:SetJustifyH(s.justify) end
+    end
+
+    -- Blizzard's own colour, recomputed rather than remembered: it depends on the
+    -- bar type, so a value captured while a normal spell was casting would be
+    -- wrong to hand back after a channel.
+    if f.UpdateBarFillTexture then pcall(f.UpdateBarFillTexture, f, false) end
+
+    saved[f] = nil
+end
+
 local SIBLINGS = {
     -- frame that exists while the sibling draws a cast bar, and the cluster
     -- whose visibility says whether it is on screen at all.
@@ -74,6 +203,14 @@ function CastBar:Apply()
     local f = playerBar()
     if not f then return end
 
+    if Config:Enabled("castBarStyle") then
+        applyStyle(f)
+        CastBar.styled = true
+    else
+        restoreStyle(f)
+        CastBar.styled = false
+    end
+
     local sibling = Config:Enabled("yieldCastBar") and siblingBar() or nil
 
     -- Only ever written when it needs to change, and the previous value is not
@@ -87,6 +224,32 @@ function CastBar:Apply()
         if not CastBar.yielded then return end
         f:SetAndUpdateShowCastbar(true)
         CastBar.yielded = nil
+    end
+end
+
+function CastBar:Init()
+    local f = playerBar()
+    if not f then return end
+
+    -- The colour is the one thing here Blizzard overwrites: UpdateBarFillTexture
+    -- re-applies a per-bar-type colour on every cast, channel and interrupt.
+    if f.UpdateBarFillTexture then
+        hooksecurefunc(f, "UpdateBarFillTexture", function(self)
+            if Config:Enabled("castBarStyle") then
+                self:SetStatusBarColor(GOLD[1], GOLD[2], GOLD[3])
+            end
+        end)
+        CastBar.hookedFill = true
+    end
+
+    -- The countdown rides Blizzard's own OnUpdate rather than a second ticker of
+    -- ours: the frame is already updating every frame while it is shown, and a
+    -- hook is one line against a whole parallel timer.
+    if f.HookScript then
+        f:HookScript("OnUpdate", function(self)
+            if CastBar.styled then updateTimer(self) end
+        end)
+        CastBar.hookedUpdate = true
     end
 end
 

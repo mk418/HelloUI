@@ -207,8 +207,14 @@ local castCheck = SettingCheck("CastBar", "Hide the cast bar when a sibling draw
 -- No chat controls. ChatFrame1 inherits EditModeChatFrameSystemTemplate on
 -- 1.15.9, so its size and position belong to Edit Mode for exactly the reasons
 -- the minimap's do.
+local castStyleCheck = SettingCheck("CastStyle", "Flat cast bar (no border art, with a timer)",
+    castCheck, "BOTTOMLEFT", 12, -4, "castBarStyle",
+    "Matches HelloWarrior's: Blizzard's border art hidden, a flat backdrop, the " ..
+    "spell name on the left and a countdown on the right. The bar's size and " ..
+    "position stay Edit Mode's.")
+
 local chatNote = panel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
-chatNote:SetPoint("TOPLEFT", castCheck, "BOTTOMLEFT", 4, -10)
+chatNote:SetPoint("TOPLEFT", castStyleCheck, "BOTTOMLEFT", 4, -10)
 chatNote:SetWidth(260)
 chatNote:SetJustifyH("LEFT")
 chatNote:SetSpacing(2)
