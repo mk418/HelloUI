@@ -275,8 +275,11 @@ end
 ----------------------------------------------------------------------
 
 _G.Enum = _G.Enum or {}
-_G.Enum.EditModeSystem = { ActionBar = 1, UnitFrame = 2, Minimap = 3, StatusTrackingBar = 4 }
+_G.Enum.EditModeSystem = { ActionBar = 1, UnitFrame = 2, Minimap = 3, StatusTrackingBar = 4, CastBar = 5 }
 _G.Enum.EditModeStatusTrackingBarSystemIndices = { StatusTrackingBar1 = 1, StatusTrackingBar2 = 2 }
+_G.Enum.EditModeStatusTrackingBarSetting = { Size = 0 }
+_G.Enum.EditModeCastBarSetting = { BarSize = 0, LockToPlayerFrame = 1 }
+_G.Enum.ActionBarOrientation = { Horizontal = 0, Vertical = 1 }
 _G.Enum.EditModeActionBarSystemIndices = {
     MainBar = 1, Bar2 = 2, Bar3 = 3, RightBar1 = 4, RightBar2 = 5,
     ExtraBar1 = 6, ExtraBar2 = 7, ExtraBar3 = 8,
@@ -314,6 +317,10 @@ _G.EditModePresetLayoutManager = {
                     anchorInfo = { point = "BOTTOM", relativeTo = "StatusTrackingBarManager", relativePoint = "BOTTOM", offsetX = 0, offsetY = 0 },
                     settings = { { setting = 0, value = 10 } }, isInDefaultPosition = true })
             end
+            -- CastBar: a system with settings directly, so systemIndex nil.
+            table.insert(systems, { system = 5, systemIndex = nil,
+                anchorInfo = { point = "CENTER", relativeTo = "UIParent", relativePoint = "CENTER", offsetX = 0, offsetY = 0 },
+                settings = { { setting = 1, value = 0 } }, isInDefaultPosition = true })
             table.insert(systems, { system = 3, systemIndex = nil,
                 anchorInfo = { point = "TOPRIGHT", relativeTo = "UIParent", relativePoint = "TOPRIGHT", offsetX = 0, offsetY = 0 },
                 settings = {}, isInDefaultPosition = true })
@@ -673,6 +680,37 @@ do
         end
     end
     eq(statusBars, 2, "both status tracking slots positioned")
+
+    -- The status bars ship 1024 wide; Size is a SCALE, and raw 0 is the
+    -- slider's floor of 50% - the narrowest Edit Mode allows, 512 against the
+    -- 454 stack.
+    for _, e in ipairs(sys) do
+        if e.system == 4 then
+            local statusSize
+            for _, st in ipairs(e.settings) do
+                if st.setting == 0 then statusSize = st.value end
+            end
+            eq(statusSize, 0, "status bar narrowed to the slider's 50% floor")
+        end
+    end
+
+    -- The cast bar is parked above the bars, not at screen centre, and is
+    -- explicitly unlocked from the player frame so the anchor is honoured.
+    local cast
+    for _, e in ipairs(sys) do
+        if e.system == 5 then cast = e end
+    end
+    ok(cast ~= nil, "cast bar found")
+    eq(cast and cast.anchorInfo.relativePoint, "BOTTOM", "cast bar measured from the screen bottom")
+    eq(cast and cast.anchorInfo.offsetY, 245, "cast bar sits above the action bars")
+    eq(cast and cast.isInDefaultPosition, false, "cast bar flagged as moved")
+    do
+        local lock
+        for _, st in ipairs(cast.settings) do
+            if st.setting == 1 then lock = st.value end
+        end
+        eq(lock, 0, "cast bar not locked to the player frame")
+    end
 
     -- Chaining bar-to-bar overlapped on screen, because an Edit Mode bar
     -- frame is shorter than its buttons. Everything is UIParent-relative now

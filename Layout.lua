@@ -124,6 +124,16 @@ local BASE_Y = 24             -- bottom row's height above the screen edge
 -- Half the twelve-wide stack (227) plus half a four-wide block (75) plus a
 -- 20px gap.
 local FLANK_X = 322
+local CASTBAR_Y = 245  -- DragonflightUI's own default, above the bars
+
+-- The status tracking bars' "Size" is a SCALE, not a width: Edit Mode does
+-- SetScale(value / 100) on a container that is 1024 wide. The slider runs
+-- 50..130 in steps of 5 and is stored pre-conversion, so raw 0 is 50% - the
+-- narrowest it offers, giving 512px against the 454px stack. Not an exact
+-- match, because 454 would need 44% and the slider will not go there, but far
+-- closer than the full-width 1024 it ships at. Note it scales height too,
+-- which is why the bar ends up appropriately slim rather than merely short.
+local STATUS_SIZE = 0
 local STATUS_Y = 4     -- the XP/reputation bars, under the stack
 
 -- Geometry is measured off DragonflightUI's own default screenshot: three
@@ -178,6 +188,17 @@ local function geometry()
           point = "BOTTOM", relativeTo = "UIParent", relativePoint = "BOTTOM", x = 0, y = BASE_Y + ROW_STEP * 3 },
     }
 
+    -- The cast bar. Blizzard's preset parks it dead centre of the screen;
+    -- DragonflightUI puts it just above the action bars, which is where the
+    -- eye expects it. LockToPlayerFrame is stated explicitly rather than
+    -- inherited - if it were ever on, the cast bar would attach itself to the
+    -- player frame and ignore this anchor entirely.
+    local CAST = Enum.EditModeSystem.CastBar
+    if CAST then
+        g[#g + 1] = { system = CAST, index = nil, lockToPlayer = 0,
+            point = "CENTER", relativeTo = "UIParent", relativePoint = "BOTTOM", x = 0, y = CASTBAR_Y }
+    end
+
     -- The micro menu and the bag bar. Both are Edit Mode systems, and left
     -- at Blizzard's defaults they sit along the bottom centre-right, straight
     -- on top of the reputation bar once that has been pinned under the stack.
@@ -201,10 +222,10 @@ local function geometry()
     -- these are just the two slots.
     Layout.statusEnumMissing = not (STATUS and SI)
     if STATUS and SI then
-        g[#g + 1] = { system = STATUS, index = SI.StatusTrackingBar1,
+        g[#g + 1] = { system = STATUS, index = SI.StatusTrackingBar1, statusSize = STATUS_SIZE,
             point = "BOTTOM", relativeTo = "UIParent", relativePoint = "BOTTOM", x = 0, y = STATUS_Y }
-        g[#g + 1] = { system = STATUS, index = SI.StatusTrackingBar2,
-            point = "BOTTOM", relativeTo = "UIParent", relativePoint = "BOTTOM", x = 0, y = STATUS_Y + 11 }
+        g[#g + 1] = { system = STATUS, index = SI.StatusTrackingBar2, statusSize = STATUS_SIZE,
+            point = "BOTTOM", relativeTo = "UIParent", relativePoint = "BOTTOM", x = 0, y = STATUS_Y + 8 }
     end
 
     return g
@@ -310,6 +331,14 @@ function Layout:Build()
                 -- assumes, and the flanks look broken rather than empty.
                 -- DragonflightUI's own default is alwaysShow = true.
                 setSetting(entry, S.AlwaysShowButtons, 1)
+            end
+
+            if def.statusSize ~= nil and Enum.EditModeStatusTrackingBarSetting then
+                setSetting(entry, Enum.EditModeStatusTrackingBarSetting.Size, def.statusSize)
+            end
+
+            if def.lockToPlayer ~= nil and Enum.EditModeCastBarSetting then
+                setSetting(entry, Enum.EditModeCastBarSetting.LockToPlayerFrame, def.lockToPlayer)
             end
             touched = touched + 1
         end
