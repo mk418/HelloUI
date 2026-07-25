@@ -168,6 +168,10 @@ DragonflightUI's layout was its default.
   action bar frame is shorter than the buttons it contains, so a 2px gap from
   the frame's top edge lands inside the row above.
 
+  The XP and reputation bars are repositioned too. Blizzard's preset anchors
+  them to `StatusTrackingBarManager`, which strands them among the button rows
+  once the main bar art they sat on is hidden.
+
   Account-wide or per-character, using Edit Mode's own `layoutType`: `Character`
   layouts are only visible to the character that owns them, so per-character
   support is a choice of enum value and a name, not a mechanism. The *choice* is
@@ -421,8 +425,19 @@ source and an assumption disagreed, the source won.
   preset layouts set `WidthHundreds`/`WidthTensAndOnes` and the matching height
   keys, so Edit Mode owns its size as well as its anchor. Easy to miss because
   the frame is not obviously "a UI system" the way the minimap is.
+- **`GetLayouts` and `SaveLayouts` are asymmetric, and it is not guessable.**
+  `C_EditMode.GetLayouts()` returns only the *saved* layouts, but `activeLayout`
+  — and every index `SaveLayouts` cares about — counts the **preset** layouts
+  first. So the list must be rebuilt as `[presets..., saved...]` before any
+  index means anything, and that combined list is what `SaveLayouts` wants
+  back. Getting this wrong silently activates a Blizzard preset instead of your
+  layout. Saving also does not *apply*: opening and immediately closing
+  `EditModeManagerFrame` is what makes Edit Mode re-read. This sequence is
+  lifted from LibEditModeOverride (plusmouse, MIT), the known-working
+  implementation, reimplemented rather than vendored under the no-libraries
+  rule.
 - **Writing an Edit Mode layout.** `C_EditMode.GetLayouts` / `SaveLayouts` /
-  `OnLayoutAdded` / `SetActiveLayout` all exist on Era. Two shape traps:
+  `SetActiveLayout` all exist on Era. Two shape traps:
   `settings` is an **array of `{setting, value}` pairs**, not the map form the
   preset files use, and `anchorInfo.relativeTo` is a frame **name string**.
   Base the systems array on `EditModePresetLayoutManager:GetCopyOfPresetLayouts()`

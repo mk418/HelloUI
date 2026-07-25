@@ -276,6 +276,7 @@ end
 
 _G.Enum = _G.Enum or {}
 _G.Enum.EditModeSystem = { ActionBar = 1, UnitFrame = 2, Minimap = 3, StatusTrackingBar = 4 }
+_G.Enum.EditModeStatusTrackingBarSystemIndices = { StatusTrackingBar1 = 1, StatusTrackingBar2 = 2 }
 _G.Enum.EditModeActionBarSystemIndices = {
     MainBar = 1, Bar2 = 2, Bar3 = 3, RightBar1 = 4, RightBar2 = 5,
     ExtraBar1 = 6, ExtraBar2 = 7, ExtraBar3 = 8,
@@ -297,29 +298,72 @@ local function presetSystem(index)
     }
 end
 
+-- TWO presets, as the real client has (Modern + Classic). The count matters:
+-- GetLayouts returns only the SAVED layouts while activeLayout indexes
+-- presets-then-saved, and getting that offset wrong is what silently
+-- activated a Blizzard preset instead of ours.
 _G.EditModePresetLayoutManager = {
     GetCopyOfPresetLayouts = function()
-        local systems = {}
-        for _, idx in ipairs({ 1, 2, 3, 4, 5, 6, 7, 8, 11, 12, 13 }) do
-            table.insert(systems, presetSystem(idx))
+        local function preset(name, idx)
+            local systems = {}
+            for _, i in ipairs({ 1, 2, 3, 4, 5, 6, 7, 8, 11, 12, 13 }) do
+                table.insert(systems, presetSystem(i))
+            end
+            for _, sidx in ipairs({ 1, 2 }) do
+                table.insert(systems, { system = 4, systemIndex = sidx,
+                    anchorInfo = { point = "BOTTOM", relativeTo = "StatusTrackingBarManager", relativePoint = "BOTTOM", offsetX = 0, offsetY = 0 },
+                    settings = { { setting = 0, value = 10 } }, isInDefaultPosition = true })
+            end
+            table.insert(systems, { system = 3, systemIndex = nil,
+                anchorInfo = { point = "TOPRIGHT", relativeTo = "UIParent", relativePoint = "TOPRIGHT", offsetX = 0, offsetY = 0 },
+                settings = {}, isInDefaultPosition = true })
+            return { layoutIndex = idx, layoutName = name, layoutType = 0, systems = systems }
         end
-        -- A non-action-bar system, to prove it survives untouched.
-        table.insert(systems, { system = 3, systemIndex = nil,
-            anchorInfo = { point = "TOPRIGHT", relativeTo = "UIParent", relativePoint = "TOPRIGHT", offsetX = 0, offsetY = 0 },
-            settings = {}, isInDefaultPosition = true })
-        return { { layoutIndex = 2, layoutName = "Classic", layoutType = 0, systems = systems } }
+        return { preset("Modern", 1), preset("Classic", 2) }
     end,
 }
 
-local editModeLayouts = { layouts = {}, activeLayout = 1 }
+_G.EditModeManagerFrame = Frame.new("EditModeManagerFrame", _G.UIParent)
+_G.EditModeManagerFrame.accountSettings = {}
+_G.ShowUIPanel = function() _G._editModeKicked = (_G._editModeKicked or 0) + 1 end
+_G.HideUIPanel = function() end
+
+-- savedLayouts is what the client stores and what GetLayouts hands back.
+local savedLayouts = {}
+local activeIndex = 1
+
 _G.C_EditMode = {
-    GetLayouts = function() return _G.CopyTable(editModeLayouts) end,
-    SaveLayouts = function(info) editModeLayouts = _G.CopyTable(info) end,
+    GetLayouts = function()
+        return { layouts = _G.CopyTable(savedLayouts), activeLayout = activeIndex }
+    end,
+    SaveLayouts = function(info)
+        _G._lastSavedCount = #info.layouts
+        -- The client keeps only the non-preset entries.
+        local kept = {}
+        for _, l in ipairs(info.layouts) do
+            if l.layoutType ~= 0 then kept[#kept + 1] = l end
+        end
+        savedLayouts = kept
+        if info.activeLayout then activeIndex = info.activeLayout end
+    end,
     IsValidLayoutName = function() return true end,
-    OnLayoutAdded = function(i, activate) if activate then editModeLayouts.activeLayout = i end end,
-    SetActiveLayout = function(i) editModeLayouts.activeLayout = i end,
+    SetActiveLayout = function(i) activeIndex = i end,
 }
-_G._editModeLayouts = function() return editModeLayouts end
+
+-- What the player would actually be looking at. The client re-derives the
+-- combined list as presets-then-saved and indexes THAT with activeLayout, so
+-- the lookup has to do the same - otherwise this stub cannot catch the very
+-- off-by-number-of-presets bug it exists for.
+_G._activeLayoutName = function()
+    local combined = {}
+    for _, l in ipairs(_G.EditModePresetLayoutManager.GetCopyOfPresetLayouts()) do
+        combined[#combined + 1] = l
+    end
+    for _, l in ipairs(savedLayouts) do combined[#combined + 1] = l end
+    local l = combined[activeIndex]
+    return l and l.layoutName
+end
+_G._savedLayouts = function() return savedLayouts end
 _G.ToggleMinimap = function()
     -- Real behaviour: hides the map and the dial, then shows both again.
     if _G.GameTimeFrame then _G.GameTimeFrame:Show() end
@@ -555,22 +599,26 @@ eq(_G.GameTimeFrame:IsShown(), false, "still hidden after ToggleMinimap re-shows
 print("\nlayout")
 -- Nothing is applied behind the player's back: login raises a prompt and
 -- otherwise leaves Edit Mode alone.
-eq(#_G._editModeLayouts().layouts, 0, "login does not silently write a layout")
+eq(#_G._savedLayouts(), 0, "login does not silently write a layout")
 eq(_G._shownPopup, "HELLOUI_USE_LAYOUT", "login asks instead")
 
--- Answer it the way a player would.
 _G.StaticPopupDialogs["HELLOUI_USE_LAYOUT"].OnAccept()
-local layouts = _G._editModeLayouts()
-eq(#layouts.layouts, 1, "accepting creates the layout")
-eq(layouts.layouts[1].layoutName, "HelloUI", "named HelloUI")
-eq(layouts.activeLayout, 1, "and switched to")
+eq(#_G._savedLayouts(), 1, "accepting creates the layout")
+eq(_G._savedLayouts()[1].layoutName, "HelloUI", "named HelloUI")
+
+-- THE regression. activeLayout indexes presets-then-saved, so an index
+-- computed against the saved-only list points at a Blizzard preset and the
+-- player watches their UI switch to Classic.
+eq(_G._activeLayoutName(), "HelloUI", "the ACTIVE layout is ours, not a preset")
+ok((_G._editModeKicked or 0) > 0, "Edit Mode was nudged into applying it")
 
 -- Once it is the active layout the question is retired for good.
 _G._shownPopup = nil
 ns.Layout.MaybeAsk(ns.Layout)
 eq(_G._shownPopup, nil, "no prompt once the layout is already active")
+
 do
-    local sys, bars, moved = layouts.layouts[1].systems, 0, 0
+    local sys, bars, moved = _G._savedLayouts()[1].systems, 0, 0
     local mainBar, minimapSystem
     for _, e in ipairs(sys) do
         if e.system == 1 then
@@ -582,14 +630,10 @@ do
         end
     end
     eq(bars, 11, "every action bar system carried over from the preset")
-    eq(moved, 7, "the seven bars we position are flagged as moved")
+    eq(moved, 7, "the seven action bars we position are flagged as moved")
     ok(minimapSystem ~= nil and minimapSystem.isInDefaultPosition == true,
         "systems we do not touch are left exactly as Blizzard had them")
 
-    -- settings is an array of pairs; a map write would silently do nothing
-    -- Read defensively: writing settings as a map instead of this array of
-    -- pairs is a real failure mode, and it should surface as a FAIL rather
-    -- than crashing the harness on a number where a table was expected.
     local size, pad, rows
     local wellFormed = true
     for _, st in ipairs(mainBar.settings) do
@@ -606,18 +650,34 @@ do
     eq(pad, 0, "icon padding raw 0 (= 2px)")
     eq(rows, 1, "main bar is one row")
     eq(mainBar.anchorInfo.relativeTo, "UIParent", "main bar pinned to UIParent")
+    eq(mainBar.anchorInfo.offsetY, 24, "main bar sits above the status bars")
 
-    -- The first attempt chained bar-to-bar and the rows overlapped on screen,
-    -- because an Edit Mode bar frame is shorter than its buttons. Everything
-    -- is UIParent-relative now, and the stacked bars must be far enough apart
-    -- that 36px icons cannot collide.
+    -- The XP/reputation bars must be re-pinned under the stack. Left on
+    -- Blizzard's preset they anchor to StatusTrackingBarManager and end up
+    -- stranded among the button rows once the bar art is hidden.
+    local statusBars = 0
+    for _, e in ipairs(sys) do
+        if e.system == 4 then
+            statusBars = statusBars + 1
+            eq(e.anchorInfo.relativeTo, "UIParent", "status bar re-pinned to UIParent")
+            eq(e.isInDefaultPosition, false, "status bar flagged as moved")
+            ok(e.anchorInfo.offsetY < 24, "status bar sits below the bottom action bar")
+            -- Only action bars take NumRows/IconSize; a status bar must not.
+            for _, st in ipairs(e.settings) do
+                ok(st.setting ~= 1 and st.setting ~= 3 and st.setting ~= 4,
+                    "no action bar settings written onto a status bar")
+            end
+        end
+    end
+    eq(statusBars, 2, "both status tracking slots positioned")
+
+    -- Chaining bar-to-bar overlapped on screen, because an Edit Mode bar
+    -- frame is shorter than its buttons. Everything is UIParent-relative now
+    -- and the stacked bars must clear a 36px icon.
     local ys, allUIParent = {}, true
     for _, e in ipairs(sys) do
-        if e.system == 1 then
-            local rel = e.anchorInfo.relativeTo
-            if rel ~= "UIParent" and rel ~= "MainMenuBarArtFrame" then allUIParent = false end
-            -- Only the three centred bars we stack; the flanking blocks and
-            -- the bars we never position are irrelevant here.
+        if e.system == 1 and not e.isInDefaultPosition then
+            if e.anchorInfo.relativeTo ~= "UIParent" then allUIParent = false end
             if e.systemIndex == 1 or e.systemIndex == 2 or e.systemIndex == 3 then
                 ys[#ys + 1] = e.anchorInfo.offsetY
             end
@@ -630,33 +690,31 @@ do
         if ys[i] ~= ys[i - 1] then minGap = math.min(minGap, ys[i] - ys[i - 1]) end
     end
     ok(minGap >= 40, ("stacked bars clear a 36px icon (smallest gap %s)"):format(tostring(minGap)))
-    eq(mainBar.anchorInfo.offsetY, 26, "main bar sits above the status bars")
 end
 
--- Applying twice must not create a second layout.
+-- Re-applying refreshes rather than duplicating, and stays active.
 ns.Layout:Apply(true)
-eq(#_G._editModeLayouts().layouts, 1, "re-applying refreshes rather than duplicating")
+eq(#_G._savedLayouts(), 1, "re-applying refreshes rather than duplicating")
+eq(_G._activeLayoutName(), "HelloUI", "still active after a refresh")
 
 -- Reset: Edit Mode saves dragging into the layout, so re-applying must
 -- overwrite whatever is there with the shipped geometry.
 do
-    local live = _G._editModeLayouts()
-    for _, e in ipairs(live.layouts[1].systems) do
+    local live = _G._savedLayouts()
+    for _, e in ipairs(live[1].systems) do
         if e.system == 1 and e.systemIndex == 1 then
-            e.anchorInfo.offsetY = 999          -- "the player dragged it"
+            e.anchorInfo.offsetY = 999
             for _, st in ipairs(e.settings) do
-                if st.setting == 3 then st.value = 9 end   -- and resized it
+                if st.setting == 3 then st.value = 9 end
             end
         end
     end
-    _G.C_EditMode.SaveLayouts(live)
     ns.Layout:Reset()
-    local after = _G._editModeLayouts()
     local mainBar
-    for _, e in ipairs(after.layouts[1].systems) do
+    for _, e in ipairs(_G._savedLayouts()[1].systems) do
         if e.system == 1 and e.systemIndex == 1 then mainBar = e end
     end
-    eq(mainBar.anchorInfo.offsetY, 26, "reset restores the shipped position")
+    eq(mainBar.anchorInfo.offsetY, 24, "reset restores the shipped position")
     local size
     for _, st in ipairs(mainBar.settings) do
         if st.setting == 3 then size = st.value end
@@ -665,21 +723,22 @@ do
 end
 
 -- Per-character mode: a separate, character-typed, character-named layout.
-ns.Config:Set("layoutPerCharacter", true)
+ns.Config:SetChar("layoutPerCharacter", true)
 ns.Layout:Apply(true)
 do
-    local live = _G._editModeLayouts()
-    eq(#live.layouts, 2, "per-character mode adds a second layout")
-    local mine = live.layouts[2]
-    eq(mine.layoutName, "HelloUI - Elouan", "named for the character")
-    eq(mine.layoutType, 2, "typed Character so other characters never see it")
-    eq(live.layouts[1].layoutName, "HelloUI", "the account layout is left alone")
-    eq(live.activeLayout, 2, "and switched to")
+    local live = _G._savedLayouts()
+    eq(#live, 2, "per-character mode adds a second layout")
+    local mine
+    for _, l in ipairs(live) do
+        if l.layoutName == "HelloUI - Elouan" then mine = l end
+    end
+    ok(mine ~= nil, "named for the character")
+    eq(mine and mine.layoutType, 2, "typed Character so other characters never see it")
+    eq(_G._activeLayoutName(), "HelloUI - Elouan", "and it is the active one")
 end
--- ...and re-applying in that mode still does not duplicate.
 ns.Layout:Apply(true)
-eq(#_G._editModeLayouts().layouts, 2, "per-character re-apply refreshes too")
-ns.Config:Set("layoutPerCharacter", false)
+eq(#_G._savedLayouts(), 2, "per-character re-apply refreshes too")
+ns.Config:ClearChar("layoutPerCharacter")
 
 print("\nbar art")
 eq(mainMenuBar:IsShown(), false, "main bar backdrop hidden")

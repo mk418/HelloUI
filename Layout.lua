@@ -113,42 +113,73 @@ end
 -- used - and a gap that is slightly too big reads as a choice, where one
 -- pixel too small reads as a bug. Nudge any of it in Edit Mode afterwards;
 -- that is the point of writing a layout rather than enforcing one.
-local ROW_STEP = 44    -- vertical distance between stacked bars
-local BASE_Y = 26      -- main bar's height above the screen bottom
-local FLANK_X = 330    -- how far the 3-row blocks sit from centre
+local ROW_STEP = 40    -- vertical pitch of the stacked bars
+local BASE_Y = 24      -- bottom row's height above the screen edge
+local FLANK_X = 330    -- how far the 4x3 blocks sit from centre
+local STATUS_Y = 4     -- the XP/reputation bars, under the stack
 
+-- Geometry is measured off DragonflightUI's own default screenshot: three
+-- rows of twelve centred and stacked upward, a 4x3 block on each flank, the
+-- small stance/pet bar centred above the stack, and the XP/reputation bars
+-- directly beneath it rather than wherever Blizzard's manager leaves them.
+--
+-- ROW_STEP is the button size plus a hair: 45px at 80% is 36, so 40 gives the
+-- snug spacing the screenshot shows while still clearing the icon. FLANK_X is
+-- derived rather than eyeballed - half the twelve-button stack (6 x 38 = 228)
+-- plus half a four-button block (76) plus a ~26px gap.
 local function geometry()
     local I = indices()
     if not I then return nil end
 
-    return {
-        { index = I.MainBar, rows = 1,
+    local BAR = Enum.EditModeSystem.ActionBar
+    local STATUS = Enum.EditModeSystem.StatusTrackingBar
+    local SI = Enum.EditModeStatusTrackingBarSystemIndices
+
+    local g = {
+        { system = BAR, index = I.MainBar, rows = 1,
           point = "BOTTOM", relativeTo = "UIParent", relativePoint = "BOTTOM", x = 0, y = BASE_Y },
 
-        { index = I.Bar2, rows = 1,
+        { system = BAR, index = I.Bar2, rows = 1,
           point = "BOTTOM", relativeTo = "UIParent", relativePoint = "BOTTOM", x = 0, y = BASE_Y + ROW_STEP },
 
-        { index = I.Bar3, rows = 1,
+        { system = BAR, index = I.Bar3, rows = 1,
           point = "BOTTOM", relativeTo = "UIParent", relativePoint = "BOTTOM", x = 0, y = BASE_Y + ROW_STEP * 2 },
 
-        -- MultiBarRight: the right-hand 4x3 block, level with the stack.
-        { index = I.RightBar1, rows = 3,
+        -- MultiBarRight: the right-hand 4x3 block.
+        { system = BAR, index = I.RightBar1, rows = 3,
           point = "BOTTOM", relativeTo = "UIParent", relativePoint = "BOTTOM", x = FLANK_X, y = BASE_Y },
 
         -- MultiBarLeft: the left-hand one. Switched off in the shipped
-        -- defaults, but positioned anyway so it lands correctly if enabled.
-        { index = I.RightBar2, rows = 3,
+        -- defaults because the old profile had it off, but positioned so it
+        -- lands correctly the moment it is enabled.
+        { system = BAR, index = I.RightBar2, rows = 3,
           point = "BOTTOM", relativeTo = "UIParent", relativePoint = "BOTTOM", x = -FLANK_X, y = BASE_Y },
 
-        -- Stance and pet share a row above the stack, as DragonflightUI had
-        -- them. Only druids ever show both at once, and they overlapped there
-        -- too - pet is nudged right so that case is merely tight, not stacked.
-        { index = I.StanceBar, rows = 1,
-          point = "BOTTOM", relativeTo = "UIParent", relativePoint = "BOTTOM", x = -120, y = BASE_Y + ROW_STEP * 3 },
+        -- Stance and pet are both centred above the stack, which is where the
+        -- screenshot puts that little bar. They therefore share a spot - only
+        -- druids ever show both at once, and they overlapped under
+        -- DragonflightUI too.
+        { system = BAR, index = I.StanceBar, rows = 1,
+          point = "BOTTOM", relativeTo = "UIParent", relativePoint = "BOTTOM", x = 0, y = BASE_Y + ROW_STEP * 3 },
 
-        { index = I.PetActionBar, rows = 1,
-          point = "BOTTOM", relativeTo = "UIParent", relativePoint = "BOTTOM", x = 120, y = BASE_Y + ROW_STEP * 3 },
+        { system = BAR, index = I.PetActionBar, rows = 1,
+          point = "BOTTOM", relativeTo = "UIParent", relativePoint = "BOTTOM", x = 0, y = BASE_Y + ROW_STEP * 3 },
     }
+
+    -- The XP and reputation bars. Blizzard's preset anchors these to
+    -- StatusTrackingBarManager, which leaves them stranded once the main bar
+    -- art they were sitting on is hidden - that is why they ended up between
+    -- the button rows. Pinned under the stack instead. Which container shows
+    -- XP and which shows reputation is priority-driven and not ours to pick;
+    -- these are just the two slots.
+    if STATUS and SI then
+        g[#g + 1] = { system = STATUS, index = SI.StatusTrackingBar1,
+            point = "BOTTOM", relativeTo = "UIParent", relativePoint = "BOTTOM", x = 0, y = STATUS_Y }
+        g[#g + 1] = { system = STATUS, index = SI.StatusTrackingBar2,
+            point = "BOTTOM", relativeTo = "UIParent", relativePoint = "BOTTOM", x = 0, y = STATUS_Y + 11 }
+    end
+
+    return g
 end
 
 --------------------------------------------------------------------------
@@ -160,6 +191,14 @@ end
 -- there is no chance of shipping a layout that is missing a system or has one
 -- shaped wrong.
 --------------------------------------------------------------------------
+
+local function presetLayouts()
+    local mgr = _G["EditModePresetLayoutManager"]
+    if not (mgr and mgr.GetCopyOfPresetLayouts) then return {} end
+    local ok, presets = pcall(mgr.GetCopyOfPresetLayouts, mgr)
+    if not ok or type(presets) ~= "table" then return {} end
+    return presets
+end
 
 local function presetSystems()
     local mgr = _G["EditModePresetLayoutManager"]
@@ -210,7 +249,7 @@ function Layout:Build()
 
     local touched = 0
     for _, def in ipairs(geo) do
-        local entry = findSystem(systems, barSystem, def.index)
+        local entry = findSystem(systems, def.system, def.index)
         if entry then
             entry.anchorInfo = {
                 point = def.point,
@@ -224,14 +263,19 @@ function Layout:Build()
             -- system as untouched and re-slam it to the preset anchor.
             entry.isInDefaultPosition = false
 
-            setSetting(entry, S.NumRows, def.rows)
-            setSetting(entry, S.IconSize, ICON_SIZE)
-            setSetting(entry, S.IconPadding, ICON_PADDING)
+            -- Rows, icon size and padding are action bar settings; the
+            -- status tracking bars carry a different setting enum entirely
+            -- and only want repositioning.
+            if def.system == barSystem then
+                setSetting(entry, S.NumRows, def.rows)
+                setSetting(entry, S.IconSize, ICON_SIZE)
+                setSetting(entry, S.IconPadding, ICON_PADDING)
+            end
             touched = touched + 1
         end
     end
 
-    if touched == 0 then return nil, "found no action bar systems to position" end
+    if touched == 0 then return nil, "found no bar systems to position" end
     return systems, touched
 end
 
@@ -256,6 +300,15 @@ function Layout:Apply(silent)
         return false
     end
 
+    -- EditModeManagerFrame.accountSettings is nil until Edit Mode has taken
+    -- delivery of the player's data. Writing before that is how you get a
+    -- layout that saves and then evaporates.
+    local mgrFrame = _G["EditModeManagerFrame"]
+    if not (mgrFrame and mgrFrame.accountSettings) then
+        if not silent then ns:Print("layout: Edit Mode isn't ready yet - try again in a moment") end
+        return false
+    end
+
     local systems, err = Layout:Build()
     if not systems then
         if not silent then ns:Print("layout: |cffff8080%s|r", tostring(err)) end
@@ -267,6 +320,31 @@ function Layout:Apply(silent)
         if not silent then ns:Print("layout: |cffff8080could not read the layout list|r") end
         return false
     end
+
+    --------------------------------------------------------------------
+    -- The preset offset, which is the whole reason the first version
+    -- silently switched to a Blizzard preset instead of ours.
+    --
+    -- C_EditMode.GetLayouts() returns only the SAVED layouts, but
+    -- activeLayout - and every index SaveLayouts cares about - counts the
+    -- preset layouts first. So the list has to be rebuilt as
+    -- [presets..., saved...] before any index means anything, and
+    -- SaveLayouts must be handed that combined list back.
+    --
+    -- Asymmetric and unguessable; this sequence is lifted from
+    -- LibEditModeOverride (plusmouse, MIT), which is the known-working
+    -- implementation of writing an Edit Mode layout from an addon and is
+    -- vendored inside DragonflightUI. Reimplemented rather than vendored
+    -- because of the no-libraries rule - about forty lines, and the credit
+    -- belongs here.
+    --------------------------------------------------------------------
+    local presets = presetLayouts()
+    local numPresets = #presets
+
+    local combined = {}
+    for _, l in ipairs(presets) do combined[#combined + 1] = l end
+    for _, l in ipairs(info.layouts) do combined[#combined + 1] = l end
+    info.layouts = combined
 
     local name = layoutName()
     local index = layoutIndexByName(info, name)
@@ -282,7 +360,8 @@ function Layout:Apply(silent)
         local wantType = layoutType()
 
         -- Blizzard caps each type at 5 and refuses the save past that, so
-        -- check first and say which type is full.
+        -- check first and say which type is full. Presets are excluded -
+        -- they are not of either user type.
         local sameType = 0
         for _, l in ipairs(info.layouts) do
             if l.layoutType == wantType then sameType = sameType + 1 end
@@ -303,14 +382,35 @@ function Layout:Apply(silent)
             end
         end
 
-        table.insert(info.layouts, {
+        -- Layouts are grouped by type in the list - presets, then account,
+        -- then character - so a new one goes after the last of its own type
+        -- rather than on the end.
+        local insertAt
+        for i, l in ipairs(info.layouts) do
+            if l.layoutType == wantType then insertAt = i + 1 end
+        end
+        if not insertAt and wantType == (Enum.EditModeLayoutType and Enum.EditModeLayoutType.Character) then
+            for i, l in ipairs(info.layouts) do
+                if l.layoutType == (Enum.EditModeLayoutType and Enum.EditModeLayoutType.Account) then
+                    insertAt = i + 1
+                end
+            end
+        end
+        -- Clamp: a position past the end is an error from table.insert, and
+        -- a miscounted preset offset should degrade to a wrong-but-safe slot
+        -- rather than a hard throw.
+        insertAt = math.min(insertAt or (numPresets + 1), #info.layouts + 1)
+
+        table.insert(info.layouts, insertAt, {
             layoutName = name,
             layoutType = wantType,
             systems = systems,
         })
-        index = #info.layouts
+        index = insertAt
         created = true
     end
+
+    info.activeLayout = index
 
     local saved = pcall(C_EditMode.SaveLayouts, info)
     if not saved then
@@ -318,12 +418,16 @@ function Layout:Apply(silent)
         return false
     end
 
-    -- OnLayoutAdded is the "a new one appeared, switch to it" path; an
-    -- existing layout is activated directly.
-    if created and C_EditMode.OnLayoutAdded then
-        pcall(C_EditMode.OnLayoutAdded, index, true, false)
-    elseif C_EditMode.SetActiveLayout then
+    if C_EditMode.SetActiveLayout then
         pcall(C_EditMode.SetActiveLayout, index)
+    end
+
+    -- Saving stores the layout; it does not make Edit Mode re-read and apply
+    -- it. Opening and immediately closing the manager is what does, and is
+    -- the same nudge LibEditModeOverride uses.
+    if ShowUIPanel and HideUIPanel and mgrFrame then
+        pcall(ShowUIPanel, mgrFrame)
+        pcall(HideUIPanel, mgrFrame)
     end
 
     Layout.applied = true

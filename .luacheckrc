@@ -40,6 +40,8 @@ read_globals = {
     "UnitClass",
     "UnitName",
     "StaticPopup_Show",
+    "ShowUIPanel",
+    "HideUIPanel",
 
     -- Namespaced API
     "C_AddOns",
