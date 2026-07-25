@@ -296,23 +296,6 @@ _G.RAID_CLASS_COLORS = { WARRIOR = { r = 0.78, g = 0.61, b = 0.43 }, MAGE = { r 
 _G.LOCALIZED_CLASS_NAMES_MALE = { WARRIOR = "Warrior", MAGE = "Mage" }
 _G.LOCALIZED_CLASS_NAMES_FEMALE = { WARRIOR = "Warrior", MAGE = "Mage" }
 
--- Friends list
-_G.FRIENDS_BUTTON_TYPE_BNET = 2
-_G.FRIENDS_BUTTON_TYPE_WOW = 3
-_G.FRIENDS_WOW_NAME_COLOR = { r = 0.11, g = 0.75, b = 0.95 }
-_G.BNET_CLIENT_WOW = "WoW"
-_G.C_FriendList = {
-    GetFriendInfoByIndex = function(i)
-        if i == 1 then
-            return { name = "Alice", className = "Mage", level = 60, connected = true, notes = "raid lead <3" }
-        end
-        return { name = "Bob", className = "Warrior", level = 60, connected = false, notes = nil }
-    end,
-}
-_G.BNGetFriendInfo = function() return nil end
-_G.BNGetGameAccountInfo = function() return nil end
-_G.FriendsFrame_UpdateFriendButton = function() end
-
 _G.UnitFrameHealthBar_Update = function() end
 _G.CopyTable = function(t)
     if type(t) ~= "table" then return t end
@@ -700,23 +683,6 @@ local chat = Frame.new("ChatFrame1", _G.UIParent)
 chat:SetPoint("BOTTOMLEFT", _G.UIParent, "BOTTOMLEFT", 10, 10)
 chat:SetSize(400, 180)
 
--- Friends list scroll frame with two recycled buttons
--- The real client declares this as a GLOBAL child of FriendsListFrame with no
--- parentKey, so FriendsListFrame.ScrollFrame is nil in game. The stub models
--- the real shape; an earlier version invented the parentKey and hid a bug.
-local friendsList = Frame.new("FriendsListFrame", _G.UIParent)
-local friendsScroll = Frame.new("FriendsFrameFriendsScrollFrame", friendsList)
-friendsScroll.buttons = {}
-for i = 1, 2 do
-    local b = Frame.new(nil, friendsList)
-    b.index = i
-    b.id = i
-    b.buttonType = _G.FRIENDS_BUTTON_TYPE_WOW
-    b.name = b:CreateFontString()
-    b.gameIcon = Frame.new(nil, b)
-    friendsScroll.buttons[i] = b
-end
-
 ----------------------------------------------------------------------
 -- Load the addon in TOC order
 ----------------------------------------------------------------------
@@ -724,7 +690,7 @@ end
 local ns = {}
 local FILES = {
     "Core.lua", "Config.lua", "Buttons.lua", "Bars.lua", "StatusBars.lua",
-    "Player.lua", "Darkmode.lua", "Minimap.lua", "CastBar.lua", "Friends.lua",
+    "Player.lua", "Darkmode.lua", "Minimap.lua", "CastBar.lua",
     "Layout.lua", "Options.lua",
 }
 
@@ -1622,20 +1588,6 @@ eq(liveStateIcon._desat, true, "a live-state icon keeps its own desaturation")
 local lr, lg = liveStateIcon:GetVertexColor()
 ok(lr == 1 and lg == 0.4, "and its own colour, which a second pass would flatten")
 
-print("\nfriends")
-ns.Friends:Refresh()
-local aliceColor = friendsScroll.buttons[1].name._color
-ok(aliceColor and aliceColor[1] == 0.41, "online mage friend class-coloured")
-ok(friendsScroll.buttons[1].HelloUIHeart ~= nil, "heart created for a <3 note")
-eq(friendsScroll.buttons[1].HelloUIHeart:IsShown(), true, "heart shown")
-ok(friendsScroll.buttons[2].HelloUIHeart == nil
-   or friendsScroll.buttons[2].HelloUIHeart:IsShown() == false,
-   "no heart on a friend without <3")
-
-----------------------------------------------------------------------
--- Combat deferral
-----------------------------------------------------------------------
-
 print("\ncombat deferral")
 inCombat = true
 ns.Config:SetChar("barsOff", { bar1 = true })
@@ -1703,7 +1655,6 @@ print("\nregressions")
 
 -- The hooks the addon claims to install are actually installed.
 ok(hooks["ToggleMinimap"], "ToggleMinimap hooked (re-hides the dial after a toggle)")
-ok(hooks["FriendsFrame_UpdateFriendButton"], "friends list update hooked")
 ok(hooks["Show"], "GameTimeFrame:Show hooked (catches other addons showing it)")
 
 -- barsOff is authoritative now: a bar absent from it is shown, even if the
@@ -1732,7 +1683,9 @@ settingValues["PROXY_SHOW_ACTIONBAR_3"] = true
 -- behaviour they used to gate now runs off the master switch alone.
 do
     local RETIRED = { "hideBarArt", "alwaysShowBarText", "hideTimeOfDay",
-                      "classColorPlayerHealth", "yieldCastBar", "castBarStyle" }
+                      "classColorPlayerHealth", "yieldCastBar", "castBarStyle",
+                      -- feature removed outright, not retired into behaviour
+                      "friendsClassColor", "friendsHeart" }
 
     -- An install that had ticked every one of them, including two set to false.
     for _, key in ipairs(RETIRED) do HelloUIDB[key] = false end
@@ -1767,7 +1720,8 @@ do
 
     -- No checkbox left behind for any of them.
     local boxes = {}
-    for _, suffix in ipairs({ "BarArt", "BarText", "TimeOfDay", "ClassColor", "CastBar", "CastStyle" }) do
+    for _, suffix in ipairs({ "BarArt", "BarText", "TimeOfDay", "ClassColor", "CastBar", "CastStyle",
+                              "Friends", "Heart" }) do
         if _G["HelloUIOpt" .. suffix] then boxes[#boxes + 1] = suffix end
     end
     ok(#boxes == 0, ("and no checkbox survives for them%s"):format(
@@ -1897,16 +1851,6 @@ ns:ApplyAll()
 eq(_G.GameTimeFrame:IsShown(), true, "dial comes back with the minimap")
 ns.Config:Set("enabled", true)
 ns:ApplyAll()
-
--- Friends: the scroll frame is reached by its global name. If this regresses
--- to FriendsListFrame.ScrollFrame the repaint silently does nothing.
-friendsScroll.buttons[1].name._color = nil
-ns.Friends:Refresh()
-ok(friendsScroll.buttons[1].name._color ~= nil, "Friends:Refresh reaches the visible rows")
-
--- An offline friend must keep Blizzard's grey, not be repainted blue.
-ok(friendsScroll.buttons[2].name._color == nil,
-    "an offline friend is left with Blizzard's own colour")
 
 -- Bar 1's page-scroll arrows live in a child frame, not in ActionButton1..12,
 -- and alpha 0 does not stop them taking clicks.

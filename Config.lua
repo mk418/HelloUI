@@ -159,10 +159,6 @@ local accountDefaults = {
     -- override, so one character opting out leaves everyone else alone.
     -- Blizzard caps layouts at five per type.
     layoutPerCharacter = false,
-
-    -- Friends.lua.
-    friendsClassColor = true,
-    friendsHeart = true,
 }
 
 -- Per-character. Sparse on purpose: a key is only present here once it has
@@ -197,13 +193,17 @@ local function copy(v)
     return out
 end
 
--- Settings that became unconditional behaviour. Deleted from saved variables on
+-- Keys nothing reads any more - some because the setting became unconditional
+-- behaviour, some because the feature is gone. Deleted from saved variables on
 -- sight rather than left to rot: an install that had ever ticked one carries the
 -- key forever otherwise, and a stale `hideBarArt = false` sitting in the file
 -- reads like a setting that stopped working rather than one that was retired.
 local RETIRED = {
+    -- Became unconditional behaviour.
     "hideBarArt", "alwaysShowBarText", "hideTimeOfDay",
     "classColorPlayerHealth", "yieldCastBar", "castBarStyle",
+    -- Feature removed outright: the friends list is Blizzard's again.
+    "friendsClassColor", "friendsHeart",
 }
 
 local function dropRetired(t)

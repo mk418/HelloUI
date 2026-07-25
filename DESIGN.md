@@ -70,7 +70,7 @@ ships in the client.
 
 ## Current scope
 
-Twelve features. Six are switches; the other six are simply what the addon does
+Eleven features. Five are switches; the other six are simply what the addon does
 — hiding the gryphons and bar backdrop, always-visible XP and reputation text,
 hiding the time-of-day dial, class-colouring the player health bar, yielding the
 cast bar to a sibling that draws its own, and the flat cast bar. Those started as
@@ -220,8 +220,6 @@ DragonflightUI's layout was its default.
 - **Minimap** — hide the time-of-day dial. Not a calendar: Era loads
   `GameTime_NoCalendar`, so `GameTimeFrame` here is the sun/moon indicator, with
   no click action at all. No positioning ships — see *Out of scope*.
-- **Friends list class colour** — plus the heart icon for friends whose note
-  contains `<3`, ported as-is because it's twenty lines and it's charming.
 - **The bar layout** — reproduces DragonflightUI's default arrangement: bars
   stacked and centred upward from the status bars, the two 3-row blocks
   flanking them at ±64, 80% icons, 2px padding.
@@ -332,8 +330,9 @@ HelloUI/
 ├── StatusBars.lua  -- the xpBarText cvar
 ├── Player.lua      -- class-coloured player health bar via lockColor
 ├── Darkmode.lua    -- desaturate + tint over an explicit allowlist
-├── Minimap.lua     -- time-of-day dial
-├── Friends.lua     -- friends-list class colour, <3 heart
+├── Minimap.lua     -- time-of-day dial, the tracking button, the clock
+├── CastBar.lua     -- yields Blizzard's cast bar to a sibling's, and flattens
+│                      the one that remains
 ├── Layout.lua      -- the DragonflightUI bar arrangement, as an Edit Mode layout
 ├── Options.lua     -- canvas options panel
 └── Tests/
@@ -463,7 +462,7 @@ The full deviation set, both accounts. Read straight out of
 | `xp.alwaysShowXP`, `rep.alwaysShowRep` | `true` | StatusBars.lua |
 | `player.classcolor` | `true` | Player.lua |
 | `minimap.hideCalendar` | `true` | Minimap.lua |
-| modules `Darkmode`, `Utility` | `true` (both default `false`) | Darkmode.lua, Friends.lua |
+| modules `Darkmode`, `Utility` | `true` (both default `false`) | Darkmode.lua; the `Utility` half was the friends list, since removed |
 | module `Chat` | `true` (default `false`) | nothing to do — Edit Mode owns it |
 | `bar1.gryphons` | `'NONE'` | Bars.lua |
 | `bar1.hideArt` | `true` | Bars.lua |
@@ -616,7 +615,7 @@ source and an assumption disagreed, the source won.
 
 1. `ADDON_LOADED` — saved variables, defaults, resolve the per-character
    override against the account layout.
-2. `PLAYER_LOGIN` — install hooks (button update, player health, friends list),
+2. `PLAYER_LOGIN` — install hooks (button update, player health, cast bar),
    register the options panel.
 3. `PLAYER_ENTERING_WORLD` — first full apply: button text, status bar text,
    darkmode, minimap, chat. Bar enable/disable goes through the apply queue.

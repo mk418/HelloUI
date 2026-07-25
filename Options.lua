@@ -267,14 +267,6 @@ minimapNote:SetSpacing(2)
 minimapNote:SetText("Position is Edit Mode's job. Stock is already flush " ..
     "top-right, and the minimap is an Edit Mode system - drag it there.")
 
-local friendsHeader = Header("Friends", minimapNote, "BOTTOMLEFT", -6, -18)
-
-local friendsCheck = SettingCheck("Friends", "Class-colour the friends list",
-    friendsHeader, "BOTTOMLEFT", -2, -8, "friendsClassColor")
-
-SettingCheck("Heart", "Heart icon for notes containing <3",
-    friendsCheck, "BOTTOMLEFT", 12, -4, "friendsHeart")
-
 --------------------------------------------------------------------------
 -- Buttons and live state
 --------------------------------------------------------------------------

@@ -47,8 +47,6 @@ text permanently readable. See `DESIGN.md` for the evidence and the reasoning.
   corner of the screen next to your player frame.
 - **Hides the minimap's time-of-day dial** (the sun/moon icon — on Classic Era
   it has no click action at all).
-- **Class-colours the friends list**, and shows a heart next to friends whose
-  note contains `<3`.
 - **Builds DragonflightUI's bar layout** as a real Edit Mode layout named
   `HelloUI` — bars stacked and centred, 80% icons, 2px padding — and switches to
   it once, on first login. The layout also covers the cast bar, the chat

@@ -207,7 +207,6 @@ ns.MODULES = {
     "Darkmode",
     "Minimap",
     "CastBar",
-    "Friends",
 }
 
 -- Layout is deliberately NOT in that list. ns:ApplyAll runs on every
