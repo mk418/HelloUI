@@ -116,8 +116,15 @@ DragonflightUI's layout was its default.
   `MINIMAP_UPDATE_TRACKING`, which fires when tracking *changes*, so a character
   logging in with tracking already active leaves it hidden indefinitely. Both
   are invisible in the shipped client because only classes with an active
-  tracking ability ever see the thing. HelloUI reparents it under the LFG eye
-  and supplies the initial visibility Blizzard never sets.
+  tracking ability ever see the thing. HelloUI reparents it, supplies the
+  initial visibility Blizzard never sets, and places it *polar*: the LFG eye's
+  own offset from the map's centre, rotated 30° around that centre. Rotation is
+  the point — the rim is a circle, so translating a button "straight down" from
+  the eye cuts the chord and lands it 57 units out on a map whose rim is at 70,
+  drawn on the map rather than on its edge. Neither of Blizzard's own declared
+  offsets survives contact either: the vanilla one overlaps the eye and the
+  non-vanilla one is the 57. The angle is a setting (`/hui tracking <deg>`)
+  because the rim is shared with every other addon's minimap button.
 - **Button borders** — Blizzard ships `ActionButtonTemplate`'s `NormalTexture`
   (`UI-Quickslot2`) at `alpha="0.5"`, because on Classic Era it was only ever
   meant to sit on top of the bar backdrop, which is what actually draws the

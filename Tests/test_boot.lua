@@ -113,8 +113,16 @@ function Frame:GetEffectiveScale()
     while p do sc = sc * (p._scale or 1); p = p._parent end
     return sc
 end
-function Frame:GetLeft() return 0 end
-function Frame:GetBottom() return 0 end
+-- Real screen rects for the frames whose geometry a feature actually reads
+-- back. The tracking-button fix is polar - it measures how far the LFG eye
+-- sits from the map's centre - so a GetLeft that answers 0 for everything
+-- would put every frame at the same point and let any placement pass.
+function Frame:SetRect(l, b, w, h) self._left, self._bottom, self._w, self._h = l, b, w, h end
+function Frame:GetLeft() return self._left or 0 end
+function Frame:GetBottom() return self._bottom or 0 end
+function Frame:GetCentre()
+    return (self._left or 0) + (self._w or 0) / 2, (self._bottom or 0) + (self._h or 0) / 2
+end
 function Frame:ClearAllPoints() self._points = {} end
 function Frame:SetPoint(p, rel, relPoint, x, y)
     self._points = { { p = p, rel = rel, relPoint = relPoint, x = x or 0, y = y or 0 } }
@@ -498,6 +506,14 @@ local backdrop = Frame.new("MinimapBackdrop", minimap)
 local lfg = Frame.new("LFGMinimapFrame", backdrop)
 lfg:SetSize(33, 33)
 lfg:SetPoint("TOPLEFT", backdrop, "TOPLEFT", 25, -28)
+
+-- The rects `/hui minimapprobe` printed in game, so the placement arithmetic is
+-- tested against what the client really reports rather than against the numbers
+-- the XML implies. The map is 140 wide, so its rim is 70 out from the centre,
+-- and the LFG eye rides that rim at 75.
+minimap:SetRect(1220, 613, 140, 140)
+backdrop:SetRect(1194, 587, 192, 191)
+lfg:SetRect(1219, 718, 32, 32)
 -- Deliberately given a parent already. A guard that skipped the fix when the
 -- frame "looked parented" is what made the icon vanish a second time, so the
 -- reparent has to happen regardless of what it is attached to.
@@ -1018,12 +1034,37 @@ do
     eq(tracking:GetParent(), backdrop,
         "reparented onto the backdrop even though it already had a parent")
     local p, rel, rp, tx, ty = tracking:GetPoint(1)
-    -- Blizzard's own position from MinimapTracking_Dropdown.xml, chosen
-    -- because the vanilla file's (11,-26) collides with LFG at (25,-28).
-    eq(rel, lfg, "anchored to the LFG icon itself, so it follows wherever that sits")
-    eq(p, "TOP", "by its top")
-    eq(rp, "BOTTOM", "to LFG's bottom - directly underneath")
-    ok(tx == 0 and ty < 0, "with a small gap, on the ring's edge")
+    eq(rel, minimap, "placed against the map's centre, the only fixed point on a circle")
+    ok(p == "CENTER" and rp == "CENTER", "centre to centre, so the offset IS the polar vector")
+
+    -- The assertion the last attempt would have failed. Dropping straight down
+    -- from the LFG eye cuts the chord: 75 out becomes 57 on a map whose rim is
+    -- at 70, which draws the button on the map instead of on its edge.
+    local mx, my = minimap:GetCentre()
+    local lx, ly = lfg:GetCentre()
+    local mapR = minimap:GetWidth() / 2
+    local lfgR = math.sqrt((lx - mx) ^ 2 + (ly - my) ^ 2)
+    local trackR = math.sqrt(tx * tx + ty * ty)
+    ok(trackR > mapR,
+        ("outside the map's own artwork (%.0f out, rim at %.0f)"):format(trackR, mapR))
+    ok(math.abs(trackR - lfgR) < 0.5,
+        ("on exactly the LFG eye's circle (%.0f vs %.0f), because rotation preserves radius")
+            :format(trackR, lfgR))
+
+    -- Below the eye, and far enough below not to be drawn on top of it.
+    local ldx, ldy = lx - mx, ly - my
+    ok(ty < ldy, "below the LFG eye, which is the direction that was asked for")
+    local gap = math.sqrt((tx - ldx) ^ 2 + (ty - ldy) ^ 2)
+    ok(gap >= 32, ("clear of the eye by a full button (%.0f units apart)"):format(gap))
+
+    -- Nudgeable, because which rim slots other addons' buttons have taken is
+    -- not knowable from in here.
+    ns.Minimap:NudgeTracking(90)
+    local _, _, _, rx, ry = tracking:GetPoint(1)
+    local rimR = math.sqrt(rx * rx + ry * ry)
+    ok(math.abs(rimR - lfgR) < 0.5, "a nudge moves it round the rim, not off it")
+    ok(ry < ty, "and 90 degrees is further down than 30")
+    ns.Minimap:NudgeTracking(30)
 
     -- The whole point: Blizzard leaves the frame hidden at login even with
     -- tracking active, so positioning it correctly achieves nothing on its own.

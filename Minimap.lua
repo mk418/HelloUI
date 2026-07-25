@@ -89,17 +89,23 @@ end
 -- Only classes with an active tracking ability ever see it, which is why it
 -- survives in the shipped client.
 --
--- The position is Blizzard's own, not invented: the SAME frame name is
--- declared in MinimapTracking_Dropdown.xml - the variant loaded on every
--- non-vanilla flavour - as
---   <Frame name="MiniMapTracking" parent="MinimapBackdrop">
---       <Anchor point="TOPLEFT" x="5" y="-64"/>
--- so that is where Blizzard puts it when the parent attribute has not gone
--- missing. It also avoids a collision the naive fix walks straight into:
--- LFGMinimapFrame sits at MinimapBackdrop TOPLEFT (25, -28), and the vanilla
--- file's own TOPLEFT (11, -26) is 14px from it with 33px icons. Blizzard's
--- dropdown position at y = -64 is a full row below, which is why it is the
--- right answer rather than merely a different one.
+-- Neither of Blizzard's own positions is usable, which is worth spelling out
+-- because both look authoritative:
+--
+--   MinimapTracking_Simple.xml   TOPLEFT (11, -26)   the vanilla file
+--   MinimapTracking_Dropdown.xml TOPLEFT (5, -64)    every other flavour
+--
+-- LFGMinimapFrame sits at TOPLEFT (25, -28) with 33px icons, so the vanilla
+-- offset is 14px from it - straight overlap, which is what the player saw. And
+-- the dropdown offset, measured against the rects the probe actually reported,
+-- is 57 units from the map's centre on a map whose rim is at 70. It is INSIDE
+-- the artwork. So is anything reached by dropping straight down from LFG: the
+-- rim is a circle, and a vertical translation cuts the chord.
+--
+-- Hence polar placement. Take the LFG eye's own offset from the map's centre -
+-- 75 units at about 137 degrees, riding the rim - and ROTATE it around that
+-- centre. Rotation preserves the radius by construction, so the button lands on
+-- the same circle every other minimap button rides, at whatever angle is free.
 --------------------------------------------------------------------------
 
 local function trackingFrame()
@@ -133,6 +139,47 @@ local function syncTrackingVisibility(f)
     end
 end
 
+local function centreOf(f)
+    if not (f and f.GetLeft) then return nil end
+    local l, b = f:GetLeft(), f:GetBottom()
+    local w, h = f:GetWidth(), f:GetHeight()
+    if not (l and b and w and h) then return nil end
+    return l + w / 2, b + h / 2
+end
+
+-- Offset from the map's centre for a button `degrees` around the rim from the
+-- LFG eye. Positive turns anticlockwise, which from the upper-left where the
+-- eye sits means downwards along the edge - the direction asked for.
+--
+-- Everything is measured live rather than taken from the XML, because the map's
+-- size is an Edit Mode setting and the eye moves with it.
+local function ringOffset(map, lfg, degrees)
+    local mx, my = centreOf(map)
+    if not mx then return nil end
+
+    local dx, dy
+    local lx, ly = centreOf(lfg)
+    if lx and (lx ~= mx or ly ~= my) then
+        dx, dy = lx - mx, ly - my
+    else
+        -- No eye to follow. Its declared position, TOPLEFT (25,-28) inside a
+        -- 192-wide backdrop centred on the map, is 5 units outside a 140-wide
+        -- map's rim at 137 degrees; rebuild that from whatever the map measures
+        -- now rather than hard-coding the 140.
+        local r = ((map.GetWidth and map:GetWidth() or 140) / 2) + 5
+        dx, dy = -r * 0.7314, r * 0.6820
+    end
+
+    local rad = degrees * math.pi / 180
+    local c, s = math.cos(rad), math.sin(rad)
+    return dx * c - dy * s, dx * s + dy * c
+end
+
+local function trackingAngle()
+    local v = Config:Get("trackingAngle")
+    return type(v) == "number" and v or 30
+end
+
 local function applyTracking()
     if not Config:Enabled("fixTrackingIcon") then return end
 
@@ -149,19 +196,24 @@ local function applyTracking()
     f:SetParent(backdrop)
     f:ClearAllPoints()
 
-    -- Directly under the LFG eye, on the ring's edge. Anchoring to LFG rather
-    -- than to fixed coordinates means it stays under it wherever that sits -
-    -- and a hidden frame still reports its position, so this works even
-    -- before either icon is shown.
+    -- Shown first, and deliberately: a hidden frame still reports a rect, but
+    -- only a frame that has one at all does, and this is also what makes the
+    -- icon appear on a character who logged in with tracking already active.
     syncTrackingVisibility(f)
 
-    local lfg = _G["LFGMinimapFrame"]
-    if lfg and lfg.GetPoint and lfg:GetPoint(1) then
-        f:SetPoint("TOP", lfg, "BOTTOM", 0, -2)
-        Minimap_.trackingFixed = "under the LFG icon"
+    -- Anchored to the map's centre rather than to the eye. Anchoring to LFG is
+    -- what produced the chord: SetPoint can only translate, and the rim needs a
+    -- rotation. The eye is still what the angle is measured FROM, so the button
+    -- keeps following it - just around the circle instead of down the screen.
+    local degrees = trackingAngle()
+    local dx, dy = ringOffset(map, _G["LFGMinimapFrame"], degrees)
+    if dx then
+        f:SetPoint("CENTER", map, "CENTER", dx, dy)
+        Minimap_.trackingFixed = ("%d degrees round the rim from the LFG eye"):format(degrees)
     else
-        -- LFG absent: Blizzard's own position from the non-vanilla variant of
-        -- this same file, which is one row below where LFG would be.
+        -- The map has no rect yet, so there is no circle to place anything on.
+        -- Blizzard's non-vanilla offset is the least wrong thing left; the next
+        -- Apply, once the map has been laid out, replaces it with the real one.
         f:SetPoint("TOPLEFT", backdrop, "TOPLEFT", 5, -64)
         Minimap_.trackingFixed = "backdrop fallback"
     end
@@ -291,6 +343,18 @@ function Minimap_:NudgeClock(x, y)
         Config:Get("clockTextX") or 3, Config:Get("clockTextY") or 2)
 end
 
+-- Live nudge for where the button sits on the rim. This one is not cosmetic
+-- fine-tuning: the rim is shared with every other addon's minimap button, and
+-- nothing in here can know which slots those have already taken. 30 degrees
+-- clears the eye; whether it lands on somebody else's button is a question only
+-- the screen can answer.
+function Minimap_:NudgeTracking(degrees)
+    if degrees then Config:Set("trackingAngle", degrees) end
+    applyTracking()
+    ns:Print("tracking button: %d degrees round the rim from the LFG eye |cff808080(/hui tracking <degrees>, negative goes the other way)|r",
+        trackingAngle())
+end
+
 -- Everything the tracking button and clock actually report, since neither is
 -- diagnosable from a screenshot.
 function Minimap_:Probe()
@@ -314,6 +378,25 @@ function Minimap_:Probe()
     dump("clock", _G["TimeManagerClockButton"])
     local tex = GetTrackingTexture and GetTrackingTexture()
     ns:Print("  GetTrackingTexture() = %s", tostring(tex))
+
+    -- The line that made the last mistake obvious. A button whose distance from
+    -- the map's centre is smaller than the map's own radius is drawn on the map,
+    -- not on its edge, and no screenshot says that as plainly as three numbers.
+    local map = _G["Minimap"]
+    local mx, my = centreOf(map)
+    if not mx then return end
+
+    local function radius(f)
+        local x, y = centreOf(f)
+        if not x then return nil end
+        local dx, dy = x - mx, y - my
+        return math.sqrt(dx * dx + dy * dy)
+    end
+
+    local function fmt(r) return r and ("%.0f"):format(r) or "?" end
+    ns:Print("  rim: map %s, lfg %s, tracking %s |cff808080(tracking should match lfg; below map is on top of the map)|r",
+        fmt((map:GetWidth() or 0) / 2), fmt(radius(_G["LFGMinimapFrame"])),
+        fmt(radius(trackingFrame())))
 end
 
 function Minimap_:StatusText()

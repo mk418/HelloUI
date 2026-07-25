@@ -328,6 +328,9 @@ SlashCmdList["HELLOUI"] = function(msg)
         else
             ns.Minimap:NudgeClock()
         end
+    elseif cmd == "tracking" then
+        local deg = rest:match("^(-?%d+)$")
+        ns.Minimap:NudgeTracking(deg and tonumber(deg) or nil)
     elseif cmd == "minimapprobe" then
         ns.Minimap:Probe()
     elseif cmd == "layout" then
@@ -357,6 +360,7 @@ SlashCmdList["HELLOUI"] = function(msg)
         ns:Print("  |cff808080layout probe|r      - print where the bars actually are")
         ns:Print("  |cff808080minimapprobe|r      - the tracking button and clock's real state")
         ns:Print("  |cff808080clock <x> <y>|r     - nudge the clock digits in their box")
+        ns:Print("  |cff808080tracking <deg>|r    - move the tracking button round the minimap's rim")
     end
 end
 

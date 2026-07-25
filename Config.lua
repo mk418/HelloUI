@@ -107,6 +107,15 @@ local accountDefaults = {
     -- stranded in the corner of the screen next to the player frame.
     fixTrackingIcon = true,
 
+    -- Where on the minimap's rim it lands, in degrees around the map from the
+    -- LFG eye, counting downwards. 30 is one button-width of arc at that
+    -- radius, so it clears the eye and rides the same circle.
+    --
+    -- A setting rather than a constant because the rim belongs to every addon
+    -- that puts a button there, and this addon cannot see those. `/hui tracking
+    -- <degrees>` moves it live; negative goes up instead of down.
+    trackingAngle = 30,
+
     -- Compensates the clock's scale so its text renders at native size and on
     -- the pixel grid even with the minimap scaled up, and rounds Blizzard's
     -- half-pixel anchor once that is true. See Minimap.lua - the first attempt
