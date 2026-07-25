@@ -11,9 +11,13 @@ not replace what DragonflightUI *was*.
 DragonflightUI stopped loading cleanly on 1.15.9. Four errors on every login:
 `hooksecurefunc('Target_Spellbar_AdjustPosition')` on a function that no longer
 exists, `StanceBarLeft` gone, `PartyMemberFrame1` gone (party frames are pooled
-now), and `RegisterEvent('MINIMAP_PING')` on an event that was removed. All four
-are the same root cause HelloBuffCap ran into: 1.15.9 moved Era onto the shared
-modern UI codebase.
+now), and `RegisterEvent('MINIMAP_PING')` rejected outright — the client's own
+words were `Attempt to register unknown event "MINIMAP_PING"`. The event itself
+still exists and still carries a documented payload; what changed is that
+Blizzard's minimap now reaches it through `RegisterEventCallback` instead, and
+plain `RegisterEvent` no longer accepts it. All four failures are the same root
+cause HelloBuffCap ran into: 1.15.9 moved Era onto the shared modern UI
+codebase.
 
 The more interesting reason is what the saved profile said. AceDB only writes
 values that differ from defaults, so `DragonflightUI.lua` in each account's
@@ -68,22 +72,46 @@ effectively nine independent switches.
 - **Button text stripping** — keybind text and macro name to alpha 0 across
   bars 1–8, the stance bar and the pet bar. The single most-set value in the old
   profile: every bar, both flags, no exceptions.
-- **Bar visibility** — turn a whole bar off. Bar 4 was off everywhere; bar 1 and
-  the stance bar were off on one character. This is the feature that makes room
-  for the class addons: they are all purely additive by design and will never
-  hide Blizzard's bars themselves, so somebody has to, and this is the addon
-  whose job it is. See *Sibling addon boundaries*.
-- **Status bar text** — force the XP and reputation bar text to be permanently
-  readable instead of mouseover-only. Note this is what `alwaysShowXP` /
-  `alwaysShowRep` actually did: they set the text's draw layer to `OVERLAY`
-  instead of `HIGHLIGHT`. The bars themselves were always visible.
+- **Bar visibility** — turn a whole bar off. One bar was off everywhere; bar 1
+  and the stance bar were off on one character. This is the feature that makes
+  room for the class addons: they are all purely additive by design and will
+  never hide Blizzard's bars themselves, so somebody has to, and this is the
+  addon whose job it is. See *Sibling addon boundaries*.
+
+  Two mechanisms, because Blizzard only supplies one. Bars 2–8 have a native
+  settings proxy (`PROXY_SHOW_ACTIONBAR_2`…`_8`) and driving it is exactly what
+  Blizzard's own checkbox does. Bar 1, the stance bar and the pet bar have no
+  native toggle at all, and hiding bar 1's *frame* is forbidden:
+  `IsNormalActionBarState()` is literally `return MainActionBar:IsShown()` and
+  every multibar is gated on it, so hiding it drags bars 2–8 down with it —
+  precisely the case this feature exists to serve. Those three are made
+  invisible and non-interactive instead.
+
+  Mind the numbering. DragonflightUI bound its `bar4` to `MultiBarLeft`, which
+  the game calls bar 5. HelloUI follows Blizzard, so the same physical bar is
+  `bar5` here and the labels match the game's own options panel.
+- **Status bar text** — make the XP and reputation bar numbers permanently
+  readable instead of mouseover-only. This is one setting, not the profile's
+  two, and it is a single CVar write: Blizzard's own
+  `StatusTrackingBarMixin:ShouldBarTextBeDisplayed` is
+  `GetCVarBool("xpBarText") or self.textLocked or manager:IsTextLocked()`, and
+  the two `textLocked` terms are the mouseover machinery — set on enter, cleared
+  on leave — so neither can be held. Both bars share that predicate, so there is
+  one switch behind them and splitting it would be a lie.
 - **Class-coloured player health bar** — `PlayerFrameHealthBar` recoloured to
-  class, re-applied after Blizzard's health update resets it to green. This was
-  the *only* unit frame setting in the entire profile.
-- **Darkmode** — desaturate + tint pass over stock frame art. Defaults matching
-  the old ones: desaturate on, tint `0.4, 0.4, 0.4`.
-- **Minimap** — hide the calendar button, keep the minimap tucked flush into the
-  top-right corner.
+  class. No hook required: `UnitFrameHealthBar_Update` guards its colour write
+  with `if not statusbar.lockColor`, so setting `lockColor` makes Blizzard stop
+  resetting it. This was the *only* unit frame setting in the entire profile.
+- **Darkmode** — desaturate + tint pass over stock frame art, desaturate on and
+  tint `0.4, 0.4, 0.4` as before, but over four areas rather than the old six.
+  `buffs` is gone because there is no stock target — 1.15.9 aura buttons are
+  anonymous pooled frames and their only border is dispel-type colour, i.e. live
+  state — and `ui` is gone because it was already a no-op upstream:
+  DragonflightUI's `UpdateUI` checked its flag and returned without touching a
+  texture.
+- **Minimap** — hide the time-of-day dial. Not a calendar: Era loads
+  `GameTime_NoCalendar`, so `GameTimeFrame` here is the sun/moon indicator, with
+  no click action at all. No positioning ships — see *Out of scope*.
 - **Chat** — pin `ChatFrame1` to a fixed anchor and size on login.
 - **Friends list class colour** — plus the heart icon for friends whose note
   contains `<3`, ported as-is because it's twenty lines and it's charming.
@@ -117,8 +145,18 @@ effectively nine independent switches.
 - **XP and reputation tracking.** HelloLog owns the per-session numbers
   (`XP.lua`, `Rep.lua`, pure tracking, no frames). HelloUI only changes whether
   Blizzard's existing bar text is legible.
-- **Minimap buttons.** HelloGear, HelloStock and HelloWorldBuffs each park a
-  `Hello*MinimapButton` on the minimap. HelloUI adds none and touches none.
+- **Minimap buttons.** Four siblings park a `Hello*MinimapButton` directly on
+  the Minimap frame: HelloGear, HelloLog, HelloStock and HelloWorldBuffs.
+  HelloUI adds none and touches none.
+- **Minimap position.** Stock 1.15.9 already anchors the minimap TOPRIGHT at
+  offset 0,0 — both Edit Mode preset layouts say so and the XML agrees — so
+  there is nothing to tuck. DragonflightUI's `+7` was compensating for dead
+  margin in a 178px frame it created and re-parented the minimap into, and does
+  not transfer. And `MinimapCluster` is an Edit Mode system: `SetPoint` is
+  replaced by an override that writes manager state in the caller's taint
+  context, the frame is `clampedToScreen` so a positive offset on a TOPRIGHT
+  anchor cannot move it anyway, and any anchor set is reverted on layout save,
+  spec change and every close of Edit Mode. Drag it in Edit Mode.
 - **Profiles, import/export, layout presets.** One account-wide layout plus one
   character override is the whole requirement.
 
@@ -129,19 +167,30 @@ effectively nine independent switches.
 ```
 HelloUI/
 ├── HelloUI.toc
-├── Core.lua        -- namespace, saved variables, event dispatcher, slash
-│                      commands, the out-of-combat apply queue
+├── .luacheckrc     -- lua51, the family's ignore list; run `luacheck .`
+├── Core.lua        -- namespace, saved variables, guarded event dispatcher,
+│                      per-site error containment, slash commands, the
+│                      out-of-combat apply queue
 ├── Config.lua      -- defaults, per-character override resolution
 ├── Buttons.lua     -- keybind / macro text alpha across every bar
-├── Bars.lua        -- per-bar enable/disable, out of combat only
-├── StatusBars.lua  -- XP / reputation text draw layer
-├── Player.lua      -- class-coloured player health bar
-├── Darkmode.lua    -- desaturate + tint pass over stock frame art
-├── Minimap.lua     -- calendar button, corner tuck
-├── Chat.lua        -- ChatFrame1 anchor + size
+├── Bars.lua        -- the bar table; native proxy for 2-8, alpha for the rest
+├── StatusBars.lua  -- the xpBarText cvar
+├── Player.lua      -- class-coloured player health bar via lockColor
+├── Darkmode.lua    -- desaturate + tint over an explicit allowlist
+├── Minimap.lua     -- time-of-day dial
+├── Chat.lua        -- ChatFrame1 anchor + size, and `/hui chat save`
 ├── Friends.lua     -- friends-list class colour, <3 heart
-└── Options.lua     -- canvas options panel
+├── Options.lua     -- canvas options panel
+└── Tests/
+    └── test_boot.lua  -- offline harness: stubs the API, loads all eleven
+                          files in TOC order, drives ADDON_LOADED through
+                          PLAYER_ENTERING_WORLD, asserts observable end state
 ```
+
+Run the harness from the addon root with `lua Tests/test_boot.lua`. It is the
+only verification available without the game, so it checks end state — alpha
+values, cvars, anchors, vertex colours — rather than whether a function was
+called, and it is mutation-tested to confirm it fails when the code is wrong.
 
 ---
 
@@ -156,9 +205,9 @@ rules, because HelloUI is the only one of the family that modifies frames it
 doesn't own.
 
 **Darkmode allowlists Blizzard textures. It never sweeps.** Two reasons, both
-fatal. HelloGear, HelloStock and HelloWorldBuffs create
+fatal. HelloGear, HelloLog, HelloStock and HelloWorldBuffs all create
 `Hello*MinimapButton` parented directly to `Minimap`, so anything that iterates
-minimap children greys out three sibling icons — which is exactly what
+minimap children greys out four sibling icons — which is exactly what
 DragonflightUI's `UpdateMinimapButton` did. And HelloWarrior and HelloTotems
 both use `SetDesaturated` on their own buttons as *live state*: HelloWarrior for
 its out-of-range tint, HelloTotems for empty-slot placeholder icons. A second
@@ -233,24 +282,69 @@ Two caveats on reading that file:
 
 ## API notes for 1.15.9
 
+Everything below was read out of Blizzard's own shipping UI source for this
+exact build — `Gethe/wow-ui-source` branch `classic_era`, whose `version.txt`
+is `1.15.9.68808`, matching `.build.info` for `wow_classic_era`. Where the
+source and an assumption disagreed, the source won.
+
 - **Flavour detection.** `EditModeManagerFrame ~= nil` or
   `StatusTrackingBarManager ~= nil`. Feature-detect, don't map interface
   versions — Blizzard is rolling the modern backport across flavours and the
   build number tells you less than the frame does.
-- **Button text.** `_G[buttonName .. 'HotKey']` and `_G[buttonName .. 'Name']`
-  still exist and are still the right handles. Guard both with `if el then` —
-  pooled and modern-template buttons don't all carry them.
-- **Player health.** `PlayerFrameHealthBar:SetStatusBarColor(...)`, re-applied on
-  health update. Blizzard resets it, so this needs a hook rather than a one-shot.
-- **Status tracking.** Keep `StatusTrackingBarManager`. DragonflightUI hid it and
-  built replacement XP and reputation bars; on a stock client the modern bar is
-  already there and already does the job, so the feature reduces to a text draw
-  layer change.
-- **Calendar button.** Stock is `GameTimeFrame`. DragonflightUI's `hideCalendar`
-  hides its own `CalendarButtonFrame`, so this one does need real code.
-- **Removed event.** `MINIMAP_PING` no longer exists. Gate any
-  `RegisterEvent` behind `C_EventUtils.IsEventValid` — and prefer that pattern
-  generally, since it's what stopped this exact crash in the fork.
+- **Button text.** Prefer the object fields `button.HotKey` and `button.Name`.
+  Both globals do also resolve: `$parentName` is a direct child of the button,
+  and `$parentHotKey` lives inside an unnamed `TextOverlayContainer` but still
+  reaches the global namespace because `$parent` resolves past unnamed ancestors
+  to the nearest named one — Blizzard relies on that themselves, and the working
+  fork dereferences `_G[name .. 'Count']` out of that same container unguarded.
+  The object fields are preferred anyway because Blizzard installs them
+  deliberately (`ActionButtonTextOverlayContainerMixin:OnLoad`) and they don't
+  depend on naming semantics.
+- **No native text toggle.** A full-tree search for a keybind- or macro-text
+  setting comes back empty. Blizzard's Action Bars panel offers per-bar
+  visibility, Lock Action Bars and cooldown numbers; Edit Mode offers
+  Orientation, NumRows, NumIcons, IconSize, IconPadding, VisibleSetting,
+  HideBarArt, HideBarScrolling and AlwaysShowButtons. So that feature is real
+  work, and it is the one place the "check Blizzard first" instinct came back
+  negative.
+- **Bar visibility is native for 2–8 only.** `PROXY_SHOW_ACTIONBAR_2`…`_8`, via
+  `Settings.SetValue`, which is what Blizzard's own checkbox drives. `MainBar`
+  has no `VisibleSetting` in either Edit Mode preset map, and neither do the
+  stance, pet or possess bars.
+- **Never `Hide()` `MainActionBar`.** `IsNormalActionBarState()` is
+  `return MainActionBar:IsShown()`, and `UpdateMultiActionBar` gates every
+  multibar on it, so the next update takes bars 2–8 down too.
+  `MainActionBar.visibility` stays nil forever — it is only ever assigned from a
+  `VisibleSetting` the main bar doesn't have — so `IsShown()` reports the real
+  state and there is no override to hide behind.
+- **`RegisterStateDriver(bar, "visibility", "hide")` is expensive.** It works and
+  self-heals every 0.2s, but each evaluation runs `HideOverride` →
+  `UpdateVisibility` → `UpdateActionBarLayout`, and for a bottom-anchored bar
+  that ends in an unconditional `UIParent_ManageFramePositions()`. A permanent
+  driver runs that pass five times a second forever.
+- **Player health.** `PlayerFrameHealthBar` is still a named global and
+  `PlayerFrame.HealthBar` also resolves. No hook needed:
+  `UnitFrameHealthBar_Update` guards its colour write with
+  `if not statusbar.lockColor`, on both the connected and disconnected paths, so
+  `lockColor = true` is Blizzard handing the colour over.
+- **Status tracking.** Keep `StatusTrackingBarManager` — DragonflightUI hid it
+  and built replacements, which is the opposite of what's wanted. Text
+  visibility is `GetCVarBool("xpBarText")`; the per-bar and per-manager
+  `textLocked` flags are the mouseover path and are cleared on mouse-out.
+- **Time-of-day dial, not a calendar.** Era loads `GameTime_NoCalendar`, so
+  `GameTimeFrame` is a `Frame` (not a `Button`) showing `UI-TOD-Indicator`, with
+  no `OnClick` and no `EnableMouse` anywhere — its tooltip script is unreachable.
+  Safe to `Hide()`, and `ToggleMinimap` is the only thing in the tree that
+  re-shows it, so hook that.
+- **`MinimapCluster` is an Edit Mode system.** `EditModeSystemMixin:OnSystemLoad`
+  replaces `SetPoint`, `ClearAllPoints`, `SetScale`, `SetShown` and `Hide` with
+  overrides, the frame is `clampedToScreen`, and `ApplySystemAnchor` reverts
+  whatever you set. Don't fight it.
+- **Callback-only events.** `RegisterEvent` and "the event exists" have come
+  apart. Gate on `C_EventUtils.IsEventValid`, wrap the `RegisterEvent` itself in
+  `pcall`, and fall back to `RegisterEventCallback` when
+  `C_EventUtils.IsCallbackEvent` says so — callbacks receive the owner as the
+  first argument, so strip it.
 - **Party frames are pooled.** `PartyFrame.PartyMemberFramePool`, enumerated via
   `EnumerateActive()`. Never index `PartyMemberFrame1..4`. Not needed in current
   scope, but it's the trap that killed DragonflightUI's party module.
@@ -277,30 +371,40 @@ Two caveats on reading that file:
 
 ## Known issues / TODO
 
-- **Darkmode is the only feature that isn't close to a direct port.**
-  DragonflightUI's pass runs largely over its own replacement art
-  (`SubMinimap.MinimapBorderSquare`, `btn.DFDeco`) mixed with Blizzard globals
-  like `MinimapCompassTexture` and the zoom button textures. Against stock
-  1.15.9 art it needs a fresh inventory of what to desaturate and tint. Start
-  narrow — minimap ring, action bar backdrop, buff borders — and grow it.
-- **Verify what Edit Mode already does before writing Buttons.lua and Bars.lua.**
-  Retail Edit Mode exposes per-bar "Hide Bar Art" and visibility settings
-  natively. If the 1.15.9 backport includes keybind/macro text toggles too, two
-  of the nine features collapse to a note in the README telling you which
-  checkbox to click. Check in-game first; this is the highest-value unknown in
-  the document.
-- **Re-express the `Drikk-MR` layout.** Hiding bar 1 and the stance bar is
-  HelloUI's job and stays here — the class addons are additive by design and
-  won't do it. Only the two re-anchors need re-expressing, and since their
-  targets were DragonflightUI frames, Edit Mode is where that now belongs.
-  Open question worth answering once: whether a per-character "bars off" set
-  should be keyed on class or set by hand.
-- **The minimap tuck may also be an Edit Mode concern** on a client where
-  `MinimapCluster` is layout-managed. Confirm before fighting it.
-- **Check the tuck against the sibling minimap buttons.** They're parented to
-  `Minimap` so they travel with it, but they sit around the ring by angle — a
-  flush-to-corner minimap may push the top and right ones off-screen. Three
-  addons' buttons ride on this.
-- **`hideCalendar` on one account only.** It's set on account `83602#1` and on
-  `Drikk-MR`, but not on `MABK`'s Default profile. Treat as intended-everywhere;
-  the inconsistency is drift, not preference.
+Nothing here has been run in the game yet. The offline harness covers the logic
+and the end state against a stubbed API, but it cannot tell you whether a frame
+looks right, so everything below wants one login to settle.
+
+- **Darkmode's allowlist is the thinnest part.** Fourteen named Blizzard
+  textures across four areas, all verified to exist in the 1.15.9 source, but
+  "exists" is not "reads well when greyed". Expect to add and remove entries by
+  eye. Two known interactions: Leatrix_Plus also re-textures
+  `PlayerFrameTexture` under its player-frame options and blanks
+  `MinimapCluster.BorderTop`, so that is the first place to look if a tint
+  stops applying; and whether `SetTexture` clears the desaturation flag is not
+  answerable from the Lua source, which is why the pass re-runs on the events
+  that drive Blizzard's re-textures.
+- **The `Drikk-MR` re-anchors are not ported.** Hiding bar 1 and the stance bar
+  is HelloUI's job and is implemented. The two bar re-anchors pointed at
+  DragonflightUI frames that no longer exist, and re-anchoring a bar is Edit
+  Mode's job now. Open question worth answering once: whether a per-character
+  "bars off" set should be keyed on class or just set by hand — right now it is
+  by hand, via `/hui char barsoff bar1 stance`.
+- **Bar 2 can be switched back on by the game.** On `ACTIONBAR_SHOW_BOTTOMLEFT`
+  Blizzard force-sets `PROXY_SHOW_ACTIONBAR_2` to true. Nothing in the current
+  defaults touches bar 2, so this is a latent issue rather than a live one, but
+  it is the one bar whose native toggle is not durable.
+- **Invisible is not gone.** Bar 1, stance and pet are alpha-0 rather than
+  hidden, for the `IsNormalActionBarState` reason above, so they still occupy
+  their slot in Blizzard's layout. In practice Edit Mode owns position and the
+  class addons draw wherever they like, so this has cost nothing — but it is a
+  deliberate compromise, not an oversight.
+- **`hideCalendar` on one account only.** It was set on account `83602#1` and on
+  `Drikk-MR`, but not on `MABK`'s Default profile. Treated as
+  intended-everywhere; the inconsistency reads as drift, not preference.
+- **Sibling minimap buttons are fine, but tight.** All four are children of
+  `Minimap` so they travel with it and with Edit Mode's size scale — no work
+  needed. Worth knowing that a 31px button placed by angle at r=75 reaches about
+  90px from the map centre against roughly 88px of stock margin to the right
+  screen edge, so a button dragged to due-right already hangs slightly
+  off-screen at stock. All four stored defaults are lower-left and safe.
