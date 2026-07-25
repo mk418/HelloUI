@@ -44,6 +44,57 @@ local function macroOf(btn, name)
     return btn.Name or _G[name .. "Name"]
 end
 
+--------------------------------------------------------------------------
+-- Button borders
+--
+-- On Classic Era the thing that makes a button look like a button is mostly
+-- the bar backdrop behind it - MainMenuBarTexture0-3, the long "Dwarf"
+-- texture with a recess milled out per slot. Each button does carry its own
+-- border, ActionButtonTemplate's NormalTexture (Interface\Buttons\UI-Quickslot2),
+-- but at `alpha="0.5"`, because it was only ever meant to sit on top of that
+-- backdrop.
+--
+-- Hide the bar art and the recesses go with it, leaving a row of icons
+-- floating on a half-transparent outline. That is a real consequence of the
+-- gryphon feature rather than a separate bug, and Blizzard's own Hide Bar Art
+-- does exactly the same thing on this client.
+--
+-- The fix is one line of stock art: take the border to full alpha. That is
+-- deliberately NOT DragonflightUI's answer - it replaced NormalTexture
+-- outright with its own atlas slice (Mixin/Actionbar.mixin.lua,
+-- ReplaceNormalTexture2), which means shipping textures and becoming the
+-- overhaul this addon is not. Full-alpha Quickslot2 is Blizzard's own border,
+-- just actually visible.
+--
+-- Safe to set and stays set: a whole-tree search finds nothing in Blizzard's
+-- action bar code that touches NormalTexture's alpha or SlotBackground, the
+-- same argument that makes the hotkey alpha permanent. Masque would own this
+-- texture if it ever skinned Blizzard's bars, but it currently skins only
+-- third-party addons here.
+--------------------------------------------------------------------------
+
+local borderAlpha = {}
+
+local function borderOf(btn)
+    return btn.GetNormalTexture and btn:GetNormalTexture() or nil
+end
+
+local function applyBorder(btn)
+    local tex = borderOf(btn)
+    if not tex then return end
+
+    if borderAlpha[tex] == nil then
+        local ok, a = pcall(tex.GetAlpha, tex)
+        borderAlpha[tex] = (ok and a) or 0.5
+    end
+
+    if Config:Enabled("buttonBorders") then
+        tex:SetAlpha(1)
+    else
+        tex:SetAlpha(borderAlpha[tex])
+    end
+end
+
 local function applyToButton(btn, name)
     local hideKey = Config:Enabled("hideKeybindText")
     local hideMacro = Config:Enabled("hideMacroText")
@@ -53,6 +104,8 @@ local function applyToButton(btn, name)
 
     local macro = macroOf(btn, name)
     if macro then macro:SetAlpha(hideMacro and 0 or 1) end
+
+    applyBorder(btn)
 end
 
 function Buttons:Apply()

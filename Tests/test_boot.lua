@@ -231,6 +231,12 @@ _G.Settings = {
 -- Class colours
 _G.UnitClass = function() return "Warrior", "WARRIOR" end
 _G.UnitName = function() return "Elouan" end
+
+-- StaticPopup: record which dialog was raised so the prompt can be asserted
+-- on and then answered, rather than silently never firing.
+_G.StaticPopupDialogs = {}
+_G._shownPopup = nil
+_G.StaticPopup_Show = function(which) _G._shownPopup = which end
 _G.RAID_CLASS_COLORS = { WARRIOR = { r = 0.78, g = 0.61, b = 0.43 }, MAGE = { r = 0.41, g = 0.8, b = 0.94 } }
 _G.LOCALIZED_CLASS_NAMES_MALE = { WARRIOR = "Warrior", MAGE = "Mage" }
 _G.LOCALIZED_CLASS_NAMES_FEMALE = { WARRIOR = "Warrior", MAGE = "Mage" }
@@ -348,6 +354,12 @@ for _, def in ipairs(BARS) do
         btn.HotKey = container:CreateFontString(def[2] .. i .. "HotKey")
         btn.HotKey.SetAlpha = function(s, a) s._alpha = a end
         btn.Name.SetAlpha = function(s, a) s._alpha = a end
+        -- ActionButtonTemplate ships NormalTexture (UI-Quickslot2) at alpha 0.5.
+        local normal = btn:CreateTexture()
+        normal._alpha = 0.5
+        normal.SetAlpha = function(s, a) s._alpha = a end
+        normal.GetAlpha = function(s) return s._alpha end
+        btn.GetNormalTexture = function() return normal end
     end
 end
 
@@ -493,6 +505,8 @@ eq(_G.ActionButton1.Name._alpha, 0, "bar1 macro text hidden")
 eq(_G.StanceButton1.HotKey._alpha, 0, "stance keybind text hidden")
 eq(_G.PetActionButton10.Name._alpha, 0, "pet macro text hidden")
 eq(_G.MultiBar7Button12.HotKey._alpha, 0, "bar8 keybind text hidden")
+eq(_G.ActionButton1:GetNormalTexture()._alpha, 1, "button border taken to full alpha")
+eq(_G.StanceButton1:GetNormalTexture()._alpha, 1, "including the stance bar")
 
 ----------------------------------------------------------------------
 -- Assertions: bars
@@ -539,11 +553,22 @@ _G.ToggleMinimap()
 eq(_G.GameTimeFrame:IsShown(), false, "still hidden after ToggleMinimap re-shows it")
 
 print("\nlayout")
+-- Nothing is applied behind the player's back: login raises a prompt and
+-- otherwise leaves Edit Mode alone.
+eq(#_G._editModeLayouts().layouts, 0, "login does not silently write a layout")
+eq(_G._shownPopup, "HELLOUI_USE_LAYOUT", "login asks instead")
+
+-- Answer it the way a player would.
+_G.StaticPopupDialogs["HELLOUI_USE_LAYOUT"].OnAccept()
 local layouts = _G._editModeLayouts()
-eq(#layouts.layouts, 1, "one layout created")
+eq(#layouts.layouts, 1, "accepting creates the layout")
 eq(layouts.layouts[1].layoutName, "HelloUI", "named HelloUI")
 eq(layouts.activeLayout, 1, "and switched to")
-eq(HelloUIDB.layoutAppliedV1, true, "one-time latch set")
+
+-- Once it is the active layout the question is retired for good.
+_G._shownPopup = nil
+ns.Layout.MaybeAsk(ns.Layout)
+eq(_G._shownPopup, nil, "no prompt once the layout is already active")
 do
     local sys, bars, moved = layouts.layouts[1].systems, 0, 0
     local mainBar, minimapSystem
@@ -581,7 +606,31 @@ do
     eq(pad, 0, "icon padding raw 0 (= 2px)")
     eq(rows, 1, "main bar is one row")
     eq(mainBar.anchorInfo.relativeTo, "UIParent", "main bar pinned to UIParent")
-    eq(mainBar.anchorInfo.offsetY, 30, "main bar sits above the status bars")
+
+    -- The first attempt chained bar-to-bar and the rows overlapped on screen,
+    -- because an Edit Mode bar frame is shorter than its buttons. Everything
+    -- is UIParent-relative now, and the stacked bars must be far enough apart
+    -- that 36px icons cannot collide.
+    local ys, allUIParent = {}, true
+    for _, e in ipairs(sys) do
+        if e.system == 1 then
+            local rel = e.anchorInfo.relativeTo
+            if rel ~= "UIParent" and rel ~= "MainMenuBarArtFrame" then allUIParent = false end
+            -- Only the three centred bars we stack; the flanking blocks and
+            -- the bars we never position are irrelevant here.
+            if e.systemIndex == 1 or e.systemIndex == 2 or e.systemIndex == 3 then
+                ys[#ys + 1] = e.anchorInfo.offsetY
+            end
+        end
+    end
+    ok(allUIParent, "no bar is anchored to another bar")
+    table.sort(ys)
+    local minGap = math.huge
+    for i = 2, #ys do
+        if ys[i] ~= ys[i - 1] then minGap = math.min(minGap, ys[i] - ys[i - 1]) end
+    end
+    ok(minGap >= 40, ("stacked bars clear a 36px icon (smallest gap %s)"):format(tostring(minGap)))
+    eq(mainBar.anchorInfo.offsetY, 26, "main bar sits above the status bars")
 end
 
 -- Applying twice must not create a second layout.
@@ -607,7 +656,7 @@ do
     for _, e in ipairs(after.layouts[1].systems) do
         if e.system == 1 and e.systemIndex == 1 then mainBar = e end
     end
-    eq(mainBar.anchorInfo.offsetY, 30, "reset restores the shipped position")
+    eq(mainBar.anchorInfo.offsetY, 26, "reset restores the shipped position")
     local size
     for _, st in ipairs(mainBar.settings) do
         if st.setting == 3 then size = st.value end
@@ -692,6 +741,7 @@ eq(cvars.xpBarText, "0", "xpBarText restored to its original value when disabled
 eq(healthBar.lockColor, nil, "lockColor handed back to Blizzard when disabled")
 eq(_G.GameTimeFrame:IsShown(), true, "time-of-day dial shown again when disabled")
 eq(_G.PlayerFrameTexture._desat, false, "darkmode restored when disabled")
+eq(_G.ActionButton1:GetNormalTexture()._alpha, 0.5, "button border back to Blizzard's 0.5")
 eq(mainMenuBar:IsShown(), true, "bar art restored when disabled")
 eq(chat:GetWidth(), 400, "chat still untouched")
 

@@ -22,6 +22,10 @@ text permanently readable. See `DESIGN.md` for the evidence and the reasoning.
 - **Hides the gryphons and the main bar backdrop** — the same two frames
   Blizzard's Edit Mode "Hide Bar Art" drives. The latency strip goes with them,
   as it does under Blizzard's own setting; the micro menu and bags stay.
+- **Solid borders on every button.** Blizzard ships the button border at half
+  alpha because it was meant to sit on the bar backdrop; with the backdrop gone
+  that reads as no border at all. This takes it to full alpha — Blizzard's own
+  texture, just actually visible.
 - **Keeps the XP and reputation bar numbers on screen** instead of
   mouseover-only. This is Blizzard's `xpBarText` setting, and it covers both
   bars together.
@@ -41,10 +45,14 @@ text permanently readable. See `DESIGN.md` for the evidence and the reasoning.
   is also the reset** — run it again and the bars go back to the shipped
   arrangement.
 
-  Layouts are account-wide by default, matching the old profile. Tick *Give each
-  character its own layout* (or `/hui layout char`) and each character gets its
-  own copy instead, so tuning the priest stops moving the warrior's bars.
-  Blizzard allows five layouts of each kind.
+  It is **asked, never applied silently** — once per session, and only when the
+  HelloUI layout is not already active, so saying yes retires the question.
+  "Never" on the prompt stops it for good.
+
+  Everyone shares one account-wide layout by default. Opting a single character
+  out is a **per-character** choice: tick *...but give THIS character its own*
+  (or `/hui layout char`) on that character only. Blizzard allows five layouts
+  of each kind.
 
 Defaults reproduce the layout that was already in use, so a fresh install should
 look like the thing it replaced rather than a blank slate.
@@ -78,8 +86,8 @@ chat frame's width and height. Drag and resize them there.
                       toggle bars off for THIS character only
 /hui layout           build the bar layout - or reset it back after you have
                       dragged things around
-/hui layout char      give this character its own layout
-/hui layout account   go back to one shared layout
+/hui layout char      this character gets its own layout (character override)
+/hui layout account   this character follows the shared one again
 /hui layout status    is it there, is it active, which mode
 ```
 

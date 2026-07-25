@@ -28,6 +28,11 @@ local accountDefaults = {
     -- work rather than the no-op it looked like. See Bars.lua.
     hideBarArt = true,
 
+    -- With the bar backdrop gone, each button's own border is all that is
+    -- left - and stock ships it at alpha 0.5, which reads as no border at
+    -- all. Full alpha, using Blizzard's own texture. See Buttons.lua.
+    buttonBorders = true,
+
     -- Bars.lua. One bar was switched off on every character - and mind the
     -- numbering. The old profile called it "bar4", but DragonflightUI bound
     -- its bar4 to MultiBarLeft, which the game itself calls bar 5
@@ -83,15 +88,17 @@ local accountDefaults = {
     -- and Edit Mode owns its anchor AND its width and height. Same reasoning
     -- as the minimap: that is Edit Mode's job now.
 
-    -- Layout.lua. Builds the DragonflightUI bar arrangement as a real Edit
-    -- Mode layout, once, on first login. Off means HelloUI never touches Edit
-    -- Mode at all; `/hui layout` still applies it on demand.
-    applyLayoutOnce = true,
+    -- Layout.lua. At login, offer the DragonflightUI bar arrangement as a
+    -- real Edit Mode layout - asked, never applied silently, and only when it
+    -- is not already active. Off means HelloUI never touches Edit Mode unless
+    -- you run `/hui layout`.
+    askLayout = true,
 
-    -- Account-wide by default, matching the old profile: 47 characters shared
-    -- one arrangement. Turn this on and each character gets its own Edit Mode
-    -- layout instead, so tuning one no longer moves the others. Blizzard caps
-    -- layouts at five per type.
+    -- Account-wide by default: 47 characters shared one arrangement, and that
+    -- is still the sensible default. This is a PER-CHARACTER decision though -
+    -- the options checkbox and `/hui layout char` write it as a character
+    -- override, so one character opting out leaves everyone else alone.
+    -- Blizzard caps layouts at five per type.
     layoutPerCharacter = false,
 
     -- Friends.lua.

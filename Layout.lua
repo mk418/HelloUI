@@ -20,11 +20,12 @@ local Config = ns.Config
 -- touches an existing one. Switching back is the layout dropdown in Edit
 -- Mode, so the worst case is one extra entry in that list.
 --
--- Applied once, then never again - see the latch below. If the player then
--- drags a bar, HelloUI must not put it back on the next login: at that point
--- the layout is theirs. Re-applying is an explicit act (`/hui layout`), and
--- because Edit Mode saves dragging into the layout itself, re-applying IS
--- the reset.
+-- Never applied behind your back. At login HelloUI asks - once per session,
+-- and only if its layout is not already the active one - and otherwise does
+-- nothing. If you then drag a bar, it stays dragged: HelloUI must not put it
+-- back, because at that point the layout is yours. Re-applying is an explicit
+-- act (`/hui layout`), and because Edit Mode saves your dragging into the
+-- layout itself, re-applying IS the reset.
 --
 -- WHERE THE NUMBERS COME FROM. DragonflightUI's own action bar defaults, in
 -- Modules/Actionbar/Actionbar.lua: buttonScale 0.8, padding 2, bar1 above the
@@ -83,26 +84,11 @@ local function layoutType()
     return T.Account or 1
 end
 
--- The auto-apply latch follows the mode: account-wide is a one-off for the
--- whole account, per-character is a one-off for each character. Turning
--- per-character on therefore gives every character its own layout as it logs
--- in, rather than doing nothing until asked.
-local function latchRead()
-    if perCharacter() then
-        return HelloUICharDB and HelloUICharDB.layoutApplied
-    end
-    return HelloUIDB and HelloUIDB.layoutAppliedV1
-end
-
-local function latchWrite()
-    if perCharacter() then
-        HelloUICharDB = HelloUICharDB or {}
-        HelloUICharDB.layoutApplied = true
-    else
-        HelloUIDB = HelloUIDB or {}
-        HelloUIDB.layoutAppliedV1 = true
-    end
-end
+-- There is no "applied once" latch any more. It existed to stop a silent
+-- auto-apply from re-running, and the login prompt replaced the silent
+-- auto-apply: the question only appears when the layout is not already
+-- active, so saying yes retires it permanently and saying no costs one
+-- dismissal per session.
 
 -- Raw Edit Mode values, not display values.
 local ICON_SIZE = 3     -- 3 * 10 + 50 = 80%
@@ -114,39 +100,54 @@ local function indices()
     return I
 end
 
--- Anchors chain bar-to-bar rather than computing pixel offsets from the
--- screen edge, because the row height depends on the icon size and Blizzard
--- already knows it. Only the main bar is pinned to UIParent.
+-- Every bar is anchored to UIParent at an explicit offset. The first attempt
+-- chained them - bar2 to MainActionBar's TOP, bar3 to bar2's, and so on - on
+-- the reasoning that Blizzard knows its own row height. It does not work: an
+-- Edit Mode action bar frame is shorter than the buttons it contains, so a
+-- 2px gap measured from the frame's top edge lands inside the row above and
+-- the whole stack overlaps. Explicit offsets are less elegant and actually
+-- correct.
+--
+-- ROW_STEP is deliberately generous. A 45px button at 80% is 36px, so 44
+-- leaves visible air between rows rather than the hairline DragonflightUI
+-- used - and a gap that is slightly too big reads as a choice, where one
+-- pixel too small reads as a bug. Nudge any of it in Edit Mode afterwards;
+-- that is the point of writing a layout rather than enforcing one.
+local ROW_STEP = 44    -- vertical distance between stacked bars
+local BASE_Y = 26      -- main bar's height above the screen bottom
+local FLANK_X = 330    -- how far the 3-row blocks sit from centre
+
 local function geometry()
     local I = indices()
     if not I then return nil end
 
     return {
         { index = I.MainBar, rows = 1,
-          point = "BOTTOM", relativeTo = "UIParent", relativePoint = "BOTTOM", x = 0, y = 30 },
+          point = "BOTTOM", relativeTo = "UIParent", relativePoint = "BOTTOM", x = 0, y = BASE_Y },
 
         { index = I.Bar2, rows = 1,
-          point = "BOTTOM", relativeTo = "MainActionBar", relativePoint = "TOP", x = 0, y = 2 },
+          point = "BOTTOM", relativeTo = "UIParent", relativePoint = "BOTTOM", x = 0, y = BASE_Y + ROW_STEP },
 
         { index = I.Bar3, rows = 1,
-          point = "BOTTOM", relativeTo = "MultiBarBottomLeft", relativePoint = "TOP", x = 0, y = 2 },
+          point = "BOTTOM", relativeTo = "UIParent", relativePoint = "BOTTOM", x = 0, y = BASE_Y + ROW_STEP * 2 },
 
-        -- MultiBarRight: the right-hand 4x3 block.
+        -- MultiBarRight: the right-hand 4x3 block, level with the stack.
         { index = I.RightBar1, rows = 3,
-          point = "LEFT", relativeTo = "MultiBarBottomLeft", relativePoint = "RIGHT", x = 64, y = 0 },
+          point = "BOTTOM", relativeTo = "UIParent", relativePoint = "BOTTOM", x = FLANK_X, y = BASE_Y },
 
-        -- MultiBarLeft: the left-hand 4x3 block. Switched off in the shipped
+        -- MultiBarLeft: the left-hand one. Switched off in the shipped
         -- defaults, but positioned anyway so it lands correctly if enabled.
         { index = I.RightBar2, rows = 3,
-          point = "RIGHT", relativeTo = "MultiBarBottomLeft", relativePoint = "LEFT", x = -64, y = 0 },
+          point = "BOTTOM", relativeTo = "UIParent", relativePoint = "BOTTOM", x = -FLANK_X, y = BASE_Y },
 
+        -- Stance and pet share a row above the stack, as DragonflightUI had
+        -- them. Only druids ever show both at once, and they overlapped there
+        -- too - pet is nudged right so that case is merely tight, not stacked.
         { index = I.StanceBar, rows = 1,
-          point = "BOTTOMLEFT", relativeTo = "MultiBarBottomRight", relativePoint = "TOPLEFT", x = 0, y = 2 },
+          point = "BOTTOM", relativeTo = "UIParent", relativePoint = "BOTTOM", x = -120, y = BASE_Y + ROW_STEP * 3 },
 
-        -- Stance and pet share a spot, exactly as DragonflightUI had them.
-        -- Only druids ever show both at once, and they overlapped there too.
         { index = I.PetActionBar, rows = 1,
-          point = "BOTTOMLEFT", relativeTo = "MultiBarBottomRight", relativePoint = "TOPLEFT", x = 0, y = 2 },
+          point = "BOTTOM", relativeTo = "UIParent", relativePoint = "BOTTOM", x = 120, y = BASE_Y + ROW_STEP * 3 },
     }
 end
 
@@ -342,14 +343,11 @@ end
 --------------------------------------------------------------------------
 
 function Layout:Init()
-    if not Config:Get("applyLayoutOnce") then return end
-    if latchRead() then return end
-
-    ns:WhenSafe("Layout:first", function()
-        -- Latch before applying, not after: a client that rejects the layout
-        -- should not retry on every single login.
-        latchWrite()
-        Layout:Apply()
+    -- PLAYER_ENTERING_WORLD also fires on every zone and instance change, so
+    -- the prompt is gated on a session flag as well as on whether the layout
+    -- is already active.
+    ns:On("PLAYER_ENTERING_WORLD", function()
+        ns:WhenSafe("Layout:ask", function() Layout:MaybeAsk() end)
     end)
 end
 
@@ -358,6 +356,60 @@ end
 -- layout itself. Named separately because that is not obvious.
 function Layout:Reset()
     return Layout:Apply()
+end
+
+--------------------------------------------------------------------------
+-- Asking, rather than deciding
+--
+-- Silently rewriting somebody's UI layout at login is exactly the kind of
+-- thing this addon spends the rest of its comments refusing to do. So it
+-- asks, once per session, and only when its layout is not already the active
+-- one - which means the question disappears for good the moment you say yes.
+--
+-- "Never" is a real button rather than a buried setting, because a prompt you
+-- cannot dismiss permanently is worse than no prompt.
+--------------------------------------------------------------------------
+
+function Layout:IsActive()
+    if not (C_EditMode and C_EditMode.GetLayouts) then return false end
+    local ok, info = pcall(C_EditMode.GetLayouts)
+    if not ok or type(info) ~= "table" then return false end
+    local index = layoutIndexByName(info, layoutName())
+    return index ~= nil and info.activeLayout == index
+end
+
+StaticPopupDialogs = StaticPopupDialogs or {}
+StaticPopupDialogs["HELLOUI_USE_LAYOUT"] = {
+    text = "Use the HelloUI bar layout?\n\n|cff808080Bars stacked and centred, the way DragonflightUI "
+        .. "had them. This adds an Edit Mode layout and switches to it - your own layouts are not "
+        .. "touched, and you can switch back in Edit Mode at any time.|r",
+    button1 = "Use it",
+    button2 = "Not now",
+    button3 = "Never",
+    OnAccept = function() ns.Layout:Apply() end,
+    OnCancel = function() end,
+    -- button3 is the "alt" action in this template.
+    OnAlt = function()
+        ns.Config:Set("askLayout", false)
+        ns:Print("layout: won't ask again - |cff808080/hui layout|r applies it whenever you want")
+    end,
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+    showAlert = false,
+    preferredIndex = 3,
+}
+
+local askedThisSession = false
+
+function Layout:MaybeAsk()
+    if askedThisSession then return end
+    if not Config:Enabled("askLayout") then return end
+    if not (C_EditMode and C_EditMode.GetLayouts) then return end
+    if Layout:IsActive() then return end
+
+    askedThisSession = true
+    if StaticPopup_Show then StaticPopup_Show("HELLOUI_USE_LAYOUT") end
 end
 
 function Layout:StatusText()
@@ -382,7 +434,8 @@ function Layout:Status()
     ns:Print("layout: %s%s",
         index and ("|cffffd100" .. name .. "|r exists at slot " .. index) or ("|cffffd100" .. name .. "|r not created"),
         (index and info.activeLayout == index) and " |cff808080(active)|r" or "")
-    ns:Print("  |cff808080mode: %s, already applied once: %s|r",
+    ns:Print("  |cff808080mode: %s%s, prompt at login: %s|r",
         perCharacter() and "per character" or "account-wide",
-        tostring(latchRead() and true or false))
+        Config:HasChar("layoutPerCharacter") and " (character override)" or "",
+        tostring(Config:Enabled("askLayout") and true or false))
 end

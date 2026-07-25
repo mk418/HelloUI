@@ -207,11 +207,24 @@ ns.MODULES = {
     "Darkmode",
     "Minimap",
     "Friends",
-    "Layout",
 }
+
+-- Layout is deliberately NOT in that list. ns:ApplyAll runs on every
+-- PLAYER_ENTERING_WORLD and on every options change, and a module in the list
+-- has its Apply called each time - which for Layout would mean rewriting the
+-- Edit Mode layout constantly and undoing any bar the player had dragged.
+-- That is the exact behaviour the design forbids, so Layout is wired by hand:
+-- Init at login, Apply only when explicitly asked.
+ns.EXTRA_MODULES = { "Layout" }
 
 function ns:InitModules()
     for _, name in ipairs(ns.MODULES) do
+        local m = ns[name]
+        if m and m.Init then
+            ns:SafeCall(name .. ":Init", m.Init, m)
+        end
+    end
+    for _, name in ipairs(ns.EXTRA_MODULES) do
         local m = ns[name]
         if m and m.Init then
             ns:SafeCall(name .. ":Init", m.Init, m)
@@ -273,6 +286,12 @@ local function status()
             ns:SafeCall(name .. ":Status", m.Status, m)
         end
     end
+    for _, name in ipairs(ns.EXTRA_MODULES) do
+        local m = ns[name]
+        if m and m.Status then
+            ns:SafeCall(name .. ":Status", m.Status, m)
+        end
+    end
     if ns.Config:HasAnyCharOverride() then
         ns:Print("this character has overrides: %s", ns.Config:CharOverrideList())
     end
@@ -306,12 +325,12 @@ SlashCmdList["HELLOUI"] = function(msg)
         if rest == "status" then
             ns.Layout:Status()
         elseif rest == "char" then
-            ns.Config:Set("layoutPerCharacter", true)
-            ns:Print("layout: switched to per-character layouts")
+            ns.Config:SetChar("layoutPerCharacter", true)
+            ns:Print("layout: this character now gets its own layout")
             ns.Layout:Apply()
         elseif rest == "account" then
-            ns.Config:Set("layoutPerCharacter", false)
-            ns:Print("layout: switched to one account-wide layout")
+            ns.Config:ClearChar("layoutPerCharacter")
+            ns:Print("layout: this character follows the shared account layout again")
             ns.Layout:Apply()
         else
             -- "reset" and no argument are the same thing: rebuild and

@@ -19,6 +19,7 @@ globals = {
     "SlashCmdList",
     "SLASH_HELLOUI1",
     "SLASH_HELLOUI2",
+    "StaticPopupDialogs",
     "_G",
 }
 
@@ -38,6 +39,7 @@ read_globals = {
     "GameTooltip",
     "UnitClass",
     "UnitName",
+    "StaticPopup_Show",
 
     -- Namespaced API
     "C_AddOns",

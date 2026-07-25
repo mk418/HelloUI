@@ -84,6 +84,19 @@ local function SubCheck(suffix, label, anchor, relPoint, x, y, tableKey, key, to
         tooltip)
 end
 
+-- A per-character decision rather than an account one. Ticking writes a
+-- character override; unticking clears it so the character follows the
+-- account default again, which is exactly what the override machinery in
+-- Config is for.
+local function CharCheck(suffix, label, anchor, relPoint, x, y, key, tooltip)
+    return MakeCheck("HelloUIOpt" .. suffix, label, anchor, relPoint, x, y,
+        function() return Config:Get(key) end,
+        function(v)
+            if v then Config:SetChar(key, true) else Config:ClearChar(key) end
+        end,
+        tooltip)
+end
+
 -- There are deliberately no sliders. Every setting this panel exposes is a
 -- boolean, because every geometry the addon might have carried turned out to
 -- belong to Edit Mode.
@@ -130,8 +143,15 @@ local barArtCheck = SettingCheck("BarArt", "Hide the gryphons and bar backdrop",
     "Takes the latency strip with it, exactly as Blizzard's setting does; " ..
     "the micro menu and bags are unaffected.")
 
+local borderCheck = SettingCheck("Borders", "Solid borders on every button",
+    barArtCheck, "BOTTOMLEFT", 0, -4, "buttonBorders",
+    "Blizzard ships the button border at half alpha because it was meant to " ..
+    "sit on the bar backdrop. With the backdrop hidden that reads as no border " ..
+    "at all, so this takes it to full alpha - Blizzard's own texture, just " ..
+    "actually visible.")
+
 local offLabel = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-offLabel:SetPoint("TOPLEFT", barArtCheck, "BOTTOMLEFT", 2, -8)
+offLabel:SetPoint("TOPLEFT", borderCheck, "BOTTOMLEFT", 2, -8)
 offLabel:SetText("Bars switched off:")
 
 -- The eight numbered bars in one tight row - their labels are single digits,
@@ -240,13 +260,21 @@ SettingCheck("Heart", "Heart icon for notes containing <3",
 -- Buttons and live state
 --------------------------------------------------------------------------
 
-local perCharCheck = SettingCheck("LayoutPerChar", "Give each character its own layout",
-    chatNote, "BOTTOMLEFT", -6, -14, "layoutPerCharacter",
-    "Off: one account-wide Edit Mode layout shared by everyone, matching the " ..
-    "old profile. On: each character gets its own copy, so tuning the priest " ..
-    "no longer moves the warrior's bars. Blizzard allows five layouts of each " ..
-    "kind. Switching modes leaves the old layout in place - delete it in Edit " ..
-    "Mode if you want it gone.")
+local askCheck = SettingCheck("AskLayout", "Offer the HelloUI layout at login",
+    chatNote, "BOTTOMLEFT", -6, -14, "askLayout",
+    "Asks once per session, and only when the HelloUI layout is not already " ..
+    "the active one - so saying yes retires the question for good.")
+
+-- Per-character, not account-wide: this character opts out of the shared
+-- layout without affecting any other.
+local perCharCheck = CharCheck("LayoutPerChar", "...but give THIS character its own",
+    askCheck, "BOTTOMLEFT", 12, -4, "layoutPerCharacter",
+    "Everyone shares one account-wide layout by default, matching the old " ..
+    "profile. Tick this on a character that wants its own copy, so tuning the " ..
+    "priest no longer moves the warrior's bars. Unticking returns this " ..
+    "character to the shared layout. Blizzard allows five layouts of each kind, " ..
+    "and switching leaves the old one in place - delete it in Edit Mode if you " ..
+    "want it gone.")
 
 local resetBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
 resetBtn:SetSize(140, 22)
@@ -319,6 +347,13 @@ function Options:Refresh()
     -- involved could not be verified against a running client while this was
     -- written, so saying plainly which ones resolved beats implying they all did.
     local found = {}
+    for _, name in ipairs(ns.EXTRA_MODULES) do
+        local m = ns[name]
+        if m and m.StatusText then
+            local text = m:StatusText()
+            if text then found[#found + 1] = text end
+        end
+    end
     for _, name in ipairs(ns.MODULES) do
         local m = ns[name]
         if m and m.StatusText then

@@ -70,7 +70,7 @@ ships in the client.
 
 ## Current scope
 
-Ten features, each independently toggleable. Three changes from the first
+Eleven features, each independently toggleable. Three changes from the first
 count: pinning the chat frame turned out to belong to Edit Mode, for the same
 reason the minimap tuck did (see *Out of scope*); hiding the main bar art
 turned out to be real work rather than the no-op it first looked like; and the
@@ -99,6 +99,13 @@ DragonflightUI's layout was its default.
   Mind the numbering. DragonflightUI bound its `bar4` to `MultiBarLeft`, which
   the game calls bar 5. HelloUI follows Blizzard, so the same physical bar is
   `bar5` here and the labels match the game's own options panel.
+- **Button borders** — Blizzard ships `ActionButtonTemplate`'s `NormalTexture`
+  (`UI-Quickslot2`) at `alpha="0.5"`, because on Classic Era it was only ever
+  meant to sit on top of the bar backdrop, which is what actually draws the
+  per-slot recesses. Hide the bar art and the recesses go with it, leaving icons
+  floating on a half-transparent outline. Full alpha fixes it with Blizzard's own
+  texture — deliberately not DragonflightUI's answer, which replaced the texture
+  outright with its own atlas and means shipping art.
 - **Main bar art** — hide the gryphons and the bar backdrop. Appearance rather
   than position, so this is HelloUI's job and not Edit Mode's; the
   delegate-to-Edit-Mode rule is about anchors. It drives the same two frames
@@ -143,19 +150,31 @@ DragonflightUI's layout was its default.
   it is the player's layout, editable and persistent like any other. Existing
   layouts are never modified, so switching back is one dropdown.
 
-  Applied **once**, latched, the same one-time-migration idiom the era-1159
-  fork used for its minimap tuck. Re-applying every login would undo any bar
+  **Asked, never applied silently** — once per session, and only when the
+  layout is not already active, so accepting retires the question permanently
+  and declining costs one dismissal. Applying on a schedule would undo any bar
   the player had since dragged, which is the "addon owns your layout" behaviour
-  the whole design is written against. And because Edit Mode saves that
-  dragging into the layout, re-applying on demand *is* the reset — there is no
-  separate restore path to get wrong.
+  the whole design is written against. Because Edit Mode saves that dragging
+  into the layout, re-applying on demand *is* the reset — no separate restore
+  path to get wrong.
+
+  Layout is deliberately **not** in `ns.MODULES`. `ApplyAll` runs on every
+  `PLAYER_ENTERING_WORLD` and every options change, and a listed module has its
+  `Apply` called each time — which here would mean rewriting the layout
+  constantly. The harness caught that as a real bug and now guards it.
+
+  Bars are anchored to `UIParent` at explicit offsets, not chained bar-to-bar.
+  Chaining was the first attempt and it overlapped on screen: an Edit Mode
+  action bar frame is shorter than the buttons it contains, so a 2px gap from
+  the frame's top edge lands inside the row above.
 
   Account-wide or per-character, using Edit Mode's own `layoutType`: `Character`
   layouts are only visible to the character that owns them, so per-character
-  support is a choice of enum value and a name, not a mechanism. The latch
-  follows the mode, so switching to per-character gives each character its own
-  copy as it logs in. Blizzard caps layouts at 5 per type, counted separately,
-  so creation can genuinely fail and says which type is full.
+  support is a choice of enum value and a name, not a mechanism. The *choice* is
+  itself a per-character override rather than an account setting — everyone
+  shares one layout until a particular character opts out. Blizzard caps layouts
+  at 5 per type, counted separately, so creation can genuinely fail and says
+  which type is full.
 - **Options panel** — canvas panel, same shape as the other Hello addons.
 
 ## Out of scope
