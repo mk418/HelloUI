@@ -110,11 +110,21 @@ DragonflightUI's layout was its default.
   Mind the numbering. DragonflightUI bound its `bar4` to `MultiBarLeft`, which
   the game calls bar 5. HelloUI follows Blizzard, so the same physical bar is
   `bar5` here and the labels match the game's own options panel.
-- **Two Blizzard minimap bugs on Era.** The tracking button is declared with no
-  `parent` in `MinimapTracking_Simple.xml`, so it strands itself in the screen's
-  top-left corner — and `MinimapTrackingSimpleMixin` only shows it from
-  `MINIMAP_UPDATE_TRACKING`, which fires when tracking *changes*, so a character
-  logging in with tracking already active leaves it hidden indefinitely. Both
+- **Three Blizzard minimap bugs on Era, all in one 33-line file.** The tracking
+  button is declared with no `parent` in `MinimapTracking_Simple.xml`, so it
+  strands itself in the screen's top-left corner; `MinimapTrackingSimpleMixin`
+  only shows it from `MINIMAP_UPDATE_TRACKING`, which fires when tracking
+  *changes*, so a character logging in with tracking already active leaves it
+  hidden indefinitely; and its ring is declared `64x64` where `LFGMinimapFrame`,
+  `MiniMapMailBorder`, `MiniMapBattlefieldBorder` and `MiniMapWorldBorder` all
+  declare the same `MiniMap-TrackingBorder` texture at `52x52` on the same
+  `33x33` frame — so it drew 23% oversized and overflowed its own frame.
+  (`64/52 = 1.2308`; measured off a screenshot by sub-pixel circle fit before
+  the change at `1.227 ± 0.008`. It is not the client's only 64 declaration of
+  that texture — `Blizzard_HelpPlate` has one — but it is the only 33×33 minimap
+  button carrying one.) Matching the eye means copying its `TOPLEFT (1,-1)`
+  inset too, not just the size: the ring art is not centred in its file, so a
+  resize alone slides the ring 3.47 units off the icon. All three
   are invisible in the shipped client because only classes with an active
   tracking ability ever see the thing. HelloUI reparents it, supplies the
   initial visibility Blizzard never sets, and places it *polar*: the LFG eye's
@@ -125,6 +135,15 @@ DragonflightUI's layout was its default.
   offsets survives contact either: the vanilla one overlaps the eye and the
   non-vanilla one is the 57. The angle is a setting (`/hui tracking <deg>`)
   because the rim is shared with every other addon's minimap button.
+  The size is matched by resizing the two *regions*, never by scaling the frame:
+  `SetPoint` offsets live in the anchored frame's own coordinate space, so
+  `SetScale(52/64)` would render that same 75-unit polar vector at 61 against a
+  rim at 70 and put the button back on the map — correct-looking art, broken
+  placement, and the existing radius assertions would not have caught it because
+  they read the raw offsets. Blizzard divides its own cached offsets by
+  `GetScale()` for exactly this reason in `MinimapClusterMixin:ResetFramePoints`.
+  The target is read live off `LFGMinimapFrameBorder` and converted through both
+  effective scales, so "match the eye" stays true if anything ever scales it.
 - **Button borders** — Blizzard ships `ActionButtonTemplate`'s `NormalTexture`
   (`UI-Quickslot2`) at `alpha="0.5"`, because on Classic Era it was only ever
   meant to sit on top of the bar backdrop, which is what actually draws the

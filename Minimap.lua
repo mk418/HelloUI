@@ -106,10 +106,55 @@ end
 -- 75 units at about 137 degrees, riding the rim - and ROTATE it around that
 -- centre. Rotation preserves the radius by construction, so the button lands on
 -- the same circle every other minimap button rides, at whatever angle is free.
+--
+-- AND IT IS DECLARED THE WRONG SIZE. Third defect in the same 33-line file.
+-- Both buttons are 33x33 frames and both rings are the same texture,
+-- Interface\Minimap\MiniMap-TrackingBorder, with no TexCoords, colour or scale
+-- attribute on either - so the declared size is the whole difference:
+--
+--   LFGMinimapFrameBorder     52x52 at TOPLEFT (1,-1)
+--   MiniMapMailBorder         52x52 at TOPLEFT
+--   MiniMapBattlefieldBorder  52x52 at TOPLEFT
+--   MiniMapWorldBorder        52x52 at TOPLEFT
+--   MiniMapTrackingBorder     64x64 at TOPLEFT      <- the vanilla file again
+--
+-- 64/52 = 1.2308, so the ring drew 23% larger than every other button on the
+-- rim; at 52 it is 30.06 units across, which fits inside the 33x33 frame, and at
+-- 64 it is 37 - overflowing its own frame by 4 units. That is the "too large".
+-- Measured independently off a screenshot by sub-pixel circle fit before it was
+-- changed: 42.91px against the eye's 34.98px, ratio 1.227 +/- 0.008. It is not
+-- the only 64 declaration of that texture in the client (Blizzard_HelpPlate has
+-- one too), but it is the only 33x33 minimap button carrying one.
+--
+-- Two consequences that are not optional:
+--
+-- 1. THE ANCHOR MOVES WITH THE SIZE. The ring art is not centred in its file -
+--    the hole sits about 0.289 of the way in from the left and top - so a
+--    TOPLEFT-anchored border on a smaller frame puts the hole somewhere new.
+--    Copying LFG's (1,-1) verbatim sidesteps having to know that fraction:
+--    same texture, same 52, same 33x33 frame, therefore the same offset from the
+--    frame's centre by construction. Which is exactly the parity the polar
+--    placement needs, since ringOffset measures the eye's FRAME centre.
+--    Resizing to 52 while leaving the anchor at (0,0) slides the ring 3.47 units
+--    up-left of the icon still sitting at Blizzard's (2,-2).
+--
+-- 2. IT IS SetSize ON THE REGIONS, NEVER SetScale ON THE FRAME. SetPoint offsets
+--    live in the anchored frame's own coordinate space, so f:SetScale(52/64)
+--    would render the 75-unit polar vector at 61 units against a rim at 70 -
+--    putting the button back on top of the map, the exact bug the rotation was
+--    written to fix, while the icon looked correct. Blizzard divides its own
+--    cached offsets by GetScale for this reason (MinimapClusterMixin's
+--    ResetFramePoints). Region sizes cannot feed back the other way:
+--    MiniMapTracking is a plain Frame with an explicit <Size x="33" y="33"/> and
+--    inherits nothing, so its rect - and the polar maths - are untouched.
 --------------------------------------------------------------------------
 
+-- MiniMapTracking first, deliberately. MiniMapTrackingFrame does not exist
+-- anywhere in the 1.15.9 client, but addons of the sort this one replaces do
+-- create it, and preferring a foreign frame would point every region lookup and
+-- every anchor below at somebody else's button.
 local function trackingFrame()
-    return _G["MiniMapTrackingFrame"] or _G["MiniMapTracking"]
+    return _G["MiniMapTracking"] or _G["MiniMapTrackingFrame"]
 end
 
 -- Blizzard never shows this frame at login. MinimapTrackingSimpleMixin only
@@ -137,6 +182,124 @@ local function syncTrackingVisibility(f)
         f:Hide()
         Minimap_.trackingShown = false
     end
+end
+
+--------------------------------------------------------------------------
+-- Matching the eye's size
+--------------------------------------------------------------------------
+
+-- Blizzard's own numbers for every other ring on the rim, used when the eye
+-- cannot be measured. Not a setting: trackingAngle is one because the rim is
+-- shared with addons this code cannot see, whereas 52 is settled by four
+-- Blizzard declarations agreeing with each other.
+local RING_SIZE, RING_INSET = 52, 1
+
+-- The vanilla file's own icon-to-ring proportion, 24 in 64. Kept rather than
+-- refitted to the ring's hole: the ring draws OVER the icon (icon on layer
+-- BORDER, ring on ARTWORK), so the square icon's corners are meant to tuck under
+-- the bevel, and that overhang should shrink with everything else. 24 * 52/64 =
+-- 19.5, which sits between the mail button's 18 and the world map's 20 and
+-- within a quarter-unit of what TBC uses for this same tracking art.
+local ICON_RATIO = 24 / 64
+
+-- Keyed by the region object, and written only once - the StatusBars savedWidth
+-- pattern. Recording unconditionally would make the second Apply file HelloUI's
+-- own 52 as "Blizzard's original" and turn the restore into a no-op.
+--
+-- A file-local rather than HelloUIDB, unlike the xpBarText original next door: a
+-- CVar survives a reload and a region's size does not, so at the next login the
+-- XML re-establishes 64 and 24 by itself and there is nothing to persist.
+local savedArt = {}
+
+local function remember(r)
+    if savedArt[r] ~= nil then return end
+    local p, rel, rp, x, y = r:GetPoint(1)
+    savedArt[r] = {
+        w = r:GetWidth(), h = r:GetHeight(),
+        p = p, rel = rel, rp = rp, x = x, y = y,
+    }
+end
+
+-- What to match, read off the eye's own ring rather than hard-coded. 52 is
+-- today's answer to "the size of the LFG icon"; the request was the question,
+-- not the answer.
+--
+-- Scale-aware, which is the one thing a verbatim copy gets wrong: GetWidth on a
+-- texture is in its own frame's coordinate space, so if another addon scales
+-- LFGMinimapFrame - minimap button packs do exactly this - then copying 52
+-- leaves two rings declared the same and RENDERED 25% apart, which is the
+-- complaint this is answering. In stock the two frames are siblings under
+-- MinimapBackdrop and the factor is exactly 1.
+local function ringSpec(f)
+    local b = _G["LFGMinimapFrameBorder"]
+    if not (b and b.GetWidth and b.GetPoint) then return RING_SIZE, RING_INSET, -RING_INSET end
+
+    local w = b:GetWidth()
+    -- Rejects nil, 0 - which would be an invisible ring and an invisible icon -
+    -- and anything too far out to be a minimap button ring.
+    if type(w) ~= "number" or w < 24 or w > 96 then return RING_SIZE, RING_INSET, -RING_INSET end
+
+    local theirs = (b.GetEffectiveScale and b:GetEffectiveScale()) or 1
+    local ours = (f.GetEffectiveScale and f:GetEffectiveScale()) or 1
+    local factor = (theirs > 0 and ours > 0) and (theirs / ours) or 1
+
+    local ox, oy = RING_INSET, -RING_INSET
+    local p, _, rp, x, y = b:GetPoint(1)
+    if p == "TOPLEFT" and rp == "TOPLEFT" and type(x) == "number" and type(y) == "number" then
+        ox, oy = x, y
+    end
+
+    return w * factor, ox * factor, oy * factor
+end
+
+-- Anchored to MiniMapTracking itself, not to whatever trackingFrame() returned:
+-- the regions belong to that frame, and anchoring a child texture to a foreign
+-- frame would leave the ring tracking something that is not its own button.
+local function matchTrackingArt()
+    local tf = _G["MiniMapTracking"]
+    if not tf then return end
+
+    local size, ox, oy = ringSpec(tf)
+
+    local border = _G["MiniMapTrackingBorder"]
+    if border and border.SetSize and border.SetPoint then
+        remember(border)
+        border:SetSize(size, size)
+        border:ClearAllPoints()
+        border:SetPoint("TOPLEFT", tf, "TOPLEFT", ox, oy)
+    end
+
+    -- Blizzard's CENTER (2,-2) goes to (0,0). That nudge existed solely to cancel
+    -- where a 64 ring flush at (0,0) put the hole; against a 52 ring at (1,-1) it
+    -- would push the icon 2.5 units down-right inside a 22-unit aperture.
+    local icon = _G["MiniMapTrackingIcon"]
+    if icon and icon.SetSize and icon.SetPoint then
+        remember(icon)
+        local n = ICON_RATIO * size
+        icon:SetSize(n, n)
+        icon:ClearAllPoints()
+        icon:SetPoint("CENTER", tf, "CENTER", 0, 0)
+    end
+
+    Minimap_.trackingRing = size
+end
+
+-- Sizes and region anchors are handed back together. Handing back only the sizes
+-- would leave Blizzard's 64 ring around an icon still centred for a 52 one.
+local function restoreTrackingArt()
+    for _, name in ipairs({ "MiniMapTrackingBorder", "MiniMapTrackingIcon" }) do
+        local r = _G[name]
+        local s = r and savedArt[r]
+        if s then
+            r:SetSize(s.w, s.h)
+            if s.p then
+                r:ClearAllPoints()
+                r:SetPoint(s.p, s.rel or _G["MiniMapTracking"], s.rp, s.x, s.y)
+            end
+            savedArt[r] = nil
+        end
+    end
+    Minimap_.trackingRing = nil
 end
 
 local function centreOf(f)
@@ -181,11 +344,30 @@ local function trackingAngle()
 end
 
 local function applyTracking()
-    if not Config:Enabled("fixTrackingIcon") then return end
-
     local f = trackingFrame()
+    if not f then return end
+
+    if not Config:Enabled("fixTrackingIcon") then
+        -- What can actually be handed back: the two region sizes and their
+        -- anchors, because those were recorded. The frame's parent, its shown
+        -- state and its polar anchor cannot be reconstructed without re-reading
+        -- Blizzard's XML - which is what `/hui off`'s own "/reload to fully
+        -- restore Blizzard's own state" already covers, and what a reload does
+        -- for free.
+        restoreTrackingArt()
+        Minimap_.trackingFixed = nil
+        return
+    end
+
+    -- The artwork first, and outside every branch below on purpose. It depends on
+    -- nothing but the two regions, so it must still happen when the map has no
+    -- rect yet and when the button is hidden - Blizzard's own mixin calls
+    -- MiniMapTracking:Show() the moment tracking changes, and the regions have to
+    -- already be right at that moment.
+    matchTrackingArt()
+
     local map = _G["Minimap"]
-    if not (f and map and f.SetParent) then return end
+    if not (map and f.SetParent) then return end
 
     -- No "already parented, leave it alone" guard. There was one, and it is
     -- why the icon vanished again: MiniMapTracking's parent after a reload is
@@ -367,7 +549,12 @@ function Minimap_:Probe()
             label, tostring(pname), tostring(f.IsShown and f:IsShown()),
             (f.GetAlpha and f:GetAlpha()) or -1,
             tostring(f.GetFrameLevel and f:GetFrameLevel()),
-            l and ("at %d,%d %dx%d"):format(l, f:GetBottom() or 0, f:GetWidth() or 0, f:GetHeight() or 0)
+            -- %.0f rather than %d throughout: region sizes here are genuinely
+            -- fractional now (the icon is 19.5), and %d on a non-integer is a
+            -- hard error outside WoW's own tolerant 5.1 - which is how the
+            -- offline harness caught this line at all.
+            l and ("at %.0f,%.0f %.1fx%.1f"):format(l, f:GetBottom() or 0,
+                f:GetWidth() or 0, f:GetHeight() or 0)
               or "|cffff8080unpositioned|r")
     end
     dump("tracking", trackingFrame())
@@ -378,6 +565,19 @@ function Minimap_:Probe()
     dump("clock", _G["TimeManagerClockButton"])
     local tex = GetTrackingTexture and GetTrackingTexture()
     ns:Print("  GetTrackingTexture() = %s", tostring(tex))
+
+    -- Same idea as the rim line below, for the size: three numbers, side by side,
+    -- where the answer is "the first two match". Printed before the early return
+    -- underneath, because the artwork is right or wrong regardless of whether the
+    -- map has a rect to measure.
+    local function widthOf(name)
+        local r = _G[name]
+        local w = r and r.GetWidth and r:GetWidth()
+        return (type(w) == "number") and ("%.1f"):format(w) or "absent"
+    end
+    ns:Print("  ring: tracking %s, lfg %s, icon %s |cff808080(tracking should match lfg)|r",
+        widthOf("MiniMapTrackingBorder"), widthOf("LFGMinimapFrameBorder"),
+        widthOf("MiniMapTrackingIcon"))
 
     -- The line that made the last mistake obvious. A button whose distance from
     -- the map's centre is smaller than the map's own radius is drawn on the map,
@@ -415,9 +615,10 @@ function Minimap_:Status()
         tostring(Minimap_.hookedToggle or false), tostring(Minimap_.hookedShow or false))
     ns:Print("  |cff808080position is Edit Mode's job; size is set in the layout|r")
     local track = trackingFrame()
-    ns:Print("  |cff808080tracking button: %s, shown=%s|r",
+    ns:Print("  |cff808080tracking button: %s, shown=%s, ring %s|r",
         (not track) and "absent" or (Minimap_.trackingFixed or "left alone"),
-        tostring(track and track.IsShown and track:IsShown()))
+        tostring(track and track.IsShown and track:IsShown()),
+        Minimap_.trackingRing and ("%.1f"):format(Minimap_.trackingRing) or "Blizzard's")
     ns:Print("  |cff808080clock text: %s|r",
         (not _G["TimeManagerClockTicker"]) and "clock not loaded" or (Minimap_.clockFixed or "left alone"))
 end

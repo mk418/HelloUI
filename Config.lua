@@ -102,9 +102,13 @@ local accountDefaults = {
     -- Mode's job.
     hideTimeOfDay = true,
 
-    -- Reparent the tracking button onto the minimap. On Era it is declared
-    -- with no parent at all and anchored TOPLEFT, so Blizzard leaves it
-    -- stranded in the corner of the screen next to the player frame.
+    -- Three shipped defects in one 33-line Blizzard file, all covered by this
+    -- one switch because they are all the same button: it is declared with no
+    -- parent at all, so Era strands it in the screen corner next to the player
+    -- frame; it is only ever shown from MINIMAP_UPDATE_TRACKING, so a character
+    -- who logs in with tracking already active never sees it; and its ring is
+    -- declared 64x64 where every other minimap button in the client uses 52x52
+    -- on the same 33x33 frame with the same texture, so it drew 23% oversized.
     fixTrackingIcon = true,
 
     -- Where on the minimap's rim it lands, in degrees around the map from the

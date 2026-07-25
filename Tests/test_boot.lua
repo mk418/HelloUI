@@ -511,9 +511,21 @@ lfg:SetPoint("TOPLEFT", backdrop, "TOPLEFT", 25, -28)
 -- tested against what the client really reports rather than against the numbers
 -- the XML implies. The map is 140 wide, so its rim is 70 out from the centre,
 -- and the LFG eye rides that rim at 75.
+--
+-- The SIZES here are the XML's, not the probe's: the probe prints with %d, which
+-- truncated the eye's 33 to 32 and the backdrop's 192 to 191. Carrying the
+-- truncation into the stub would make "the tracking button has the same hit rect
+-- as the eye" - which is true in the client, both are 33x33 - unassertable.
 minimap:SetRect(1220, 613, 140, 140)
-backdrop:SetRect(1194, 587, 192, 191)
-lfg:SetRect(1219, 718, 32, 32)
+backdrop:SetRect(1194, 587, 192, 192)
+lfg:SetRect(1219, 718, 33, 33)
+
+-- The eye's ring. 52x52 at TOPLEFT (1,-1), which is also what MiniMapMailBorder,
+-- MiniMapBattlefieldBorder and MiniMapWorldBorder declare - the house size for a
+-- minimap button ring on a 33x33 frame.
+local lfgBorder = lfg:CreateTexture("LFGMinimapFrameBorder")
+lfgBorder:SetSize(52, 52)
+lfgBorder:SetPoint("TOPLEFT", lfg, "TOPLEFT", 1, -1)
 -- Deliberately given a parent already. A guard that skipped the fix when the
 -- frame "looked parented" is what made the icon vanish a second time, so the
 -- reparent has to happen regardless of what it is attached to.
@@ -525,8 +537,23 @@ tracking:SetPoint("TOPLEFT", strayParent, "TOPLEFT", 11, -26)
 -- MINIMAP_UPDATE_TRACKING - which does not fire for tracking that was already
 -- active at login.
 tracking:Hide()
-local trackingIcon = Frame.new("MiniMapTrackingIcon", tracking)
-trackingIcon.SetTexture = function(self, t) self._tex = t end
+
+-- Both of its regions, at their real declared geometry, so the test starts from
+-- the bug rather than from a blank frame. The ring is the same texture file as
+-- the eye's at 64x64 instead of 52x52, which is the whole defect; the icon is
+-- 24x24 with a CENTER (2,-2) nudge that exists only to cancel where a 64 ring
+-- anchored flush at (0,0) puts the hole.
+--
+-- Real CreateTexture regions, not Frame.new: an un-sized stub reports the
+-- Frame.new default 100x20, so a fix deriving the icon from the live size would
+-- compute 81.25 here and 19.5 in game, and the restore path would record 100x20
+-- as "Blizzard's original".
+local trackingBorder = tracking:CreateTexture("MiniMapTrackingBorder")
+trackingBorder:SetSize(64, 64)
+trackingBorder:SetPoint("TOPLEFT", tracking, "TOPLEFT", 0, 0)
+local trackingIcon = tracking:CreateTexture("MiniMapTrackingIcon")
+trackingIcon:SetSize(24, 24)
+trackingIcon:SetPoint("CENTER", tracking, "CENTER", 2, -2)
 _G.GetTrackingTexture = function() return 135725 end
 
 -- The clock, inside a minimap subtree scaled to 110% - which is what makes
@@ -1057,6 +1084,118 @@ do
     local gap = math.sqrt((tx - ldx) ^ 2 + (ty - ldy) ^ 2)
     ok(gap >= 32, ("clear of the eye by a full button (%.0f units apart)"):format(gap))
 
+    -- The ring's SIZE, which is a separate defect from its position: the same
+    -- texture file that the eye declares 52x52 is declared 64x64 here, on an
+    -- identically-sized 33x33 frame.
+    --
+    -- Asserted against the eye's own live value rather than the literal 52, since
+    -- "match the LFG icon" is what was asked. A fix hard-coding 52 passes an
+    -- `== 52` check even when the thing it is supposed to match is not 52.
+    eq(trackingBorder:GetWidth(), lfgBorder:GetWidth(), "ring matches the LFG eye's ring")
+    eq(trackingBorder:GetHeight(), lfgBorder:GetHeight(), "on both axes")
+
+    -- Size without the anchor slides the ring off the icon, because the ring art
+    -- is not centred in its own texture.
+    local bp, brel, brp, bx, by = trackingBorder:GetPoint(1)
+    eq(brel, tracking, "ring anchored to its own button")
+    ok(bp == "TOPLEFT" and brp == "TOPLEFT", "by its top left, as Blizzard declares it")
+    local _, _, _, lbx, lby = lfgBorder:GetPoint(1)
+    ok(bx == lbx and by == lby,
+        ("at the eye's own inset (%s,%s), so the ring sits where the eye's does"):format(tostring(bx), tostring(by)))
+
+    -- The aperture shrinks with the ring, so a 24px icon would overflow it.
+    eq(trackingIcon:GetWidth(), 24 * lfgBorder:GetWidth() / 64, "icon scaled by the same factor")
+    local ip, irel, irp, ix, iy = trackingIcon:GetPoint(1)
+    eq(irel, tracking, "icon anchored to its own button")
+    ok(ip == "CENTER" and irp == "CENTER", "centre to centre")
+    ok(ix == 0 and iy == 0,
+        "with Blizzard's (2,-2) dropped - it only existed to cancel a 64 ring at (0,0)")
+
+    -- THE SCALE TRAP. f:SetScale(52/64) looks like the same fix and is not: the
+    -- polar offsets are in the frame's own space, so a 75-unit vector would render
+    -- at 61 against a rim at 70 and put the button back on the map. Nothing in the
+    -- placement assertions above can see it, because they read the raw offsets.
+    eq(tracking:GetScale(), 1, "the frame itself is never scaled")
+    ok(math.abs(tracking:GetEffectiveScale() - lfg:GetEffectiveScale()) < 1e-9,
+        "so the button and the eye are measured in one coordinate space")
+    eq(tracking:GetWidth(), 33, "and the 33x33 hit rect survives, same as the eye's")
+
+    -- The size fix must not have moved the button. Recomputed rather than assumed:
+    -- MiniMapTracking is a plain Frame with an explicit size, so region sizes
+    -- cannot feed back into its rect, and this is what proves it.
+    local _, _, _, sx, sy = tracking:GetPoint(1)
+    ok(math.abs(math.sqrt(sx * sx + sy * sy) - trackR) < 1e-9,
+        "and the polar radius is untouched by the resize")
+
+    -- Does the code actually READ the eye, or just hard-code 52? Only a live value
+    -- that differs can tell those apart.
+    lfgBorder:SetSize(50, 50)
+    ns.Minimap:Apply()
+    eq(trackingBorder:GetWidth(), 50, "follows the eye to a different size")
+    eq(trackingIcon:GetWidth(), 24 * 50 / 64, "and rescales the icon with it")
+    lfgBorder:SetSize(52, 52)
+    ns.Minimap:Apply()
+
+    -- A zero would be an invisible ring around an invisible icon, so garbage falls
+    -- back to Blizzard's own 52 rather than being followed or bailing out.
+    for _, bad in ipairs({ 0, 500 }) do
+        lfgBorder:SetSize(bad, bad)
+        ns.Minimap:Apply()
+        eq(trackingBorder:GetWidth(), 52, ("a %d-wide eye ring is rejected, not copied"):format(bad))
+        eq(trackingIcon:GetWidth(), 19.5, "and the icon stays sane too")
+    end
+    lfgBorder:SetSize(52, 52)
+
+    -- No eye at all: still shrink, because 52 is independently correct.
+    _G.LFGMinimapFrameBorder = nil
+    ns.Minimap:Apply()
+    eq(trackingBorder:GetWidth(), 52, "no eye to measure falls back to Blizzard's own 52")
+    _G.LFGMinimapFrameBorder = lfgBorder
+    ns.Minimap:Apply()
+
+    -- Both call-site placements, which are otherwise untestable claims. The sizing
+    -- sits outside the "is anything being tracked" branch and outside the "does
+    -- the map have a rect" branch, so neither a hidden button nor an unmeasurable
+    -- map can leave the ring at 64.
+    trackingBorder:SetSize(64, 64)
+    _G.GetTrackingTexture = function() return nil end
+    ns.Minimap:Apply()
+    eq(trackingBorder:GetWidth(), 52, "sized even while hidden, since Blizzard shows it itself")
+    _G.GetTrackingTexture = function() return 135725 end
+
+    trackingBorder:SetSize(64, 64)
+    local realGetWidth = minimap.GetWidth
+    minimap.GetWidth = function() return nil end
+    ns.Minimap:Apply()
+    eq(trackingBorder:GetWidth(), 52, "sized even when the map has no rect to measure")
+    minimap.GetWidth = realGetWidth
+    ns.Minimap:Apply()
+
+    -- APPARENT size, not declared size. A texture's GetWidth is in its own
+    -- frame's coordinate space, so if another addon scales the eye - minimap
+    -- button packs do exactly that - copying its 52 verbatim leaves two rings
+    -- identical on paper and 25% apart on screen, which is the complaint being
+    -- fixed rather than a hypothetical.
+    lfg:SetScale(0.8)
+    ns.Minimap:Apply()
+    ok(math.abs(trackingBorder:GetWidth() - 52 * 0.8) < 1e-9,
+        ("matches the eye's rendered size when the eye is scaled (%.2f)"):format(trackingBorder:GetWidth()))
+    lfg:SetScale(1)
+    ns.Minimap:Apply()
+    eq(trackingBorder:GetWidth(), 52, "and back when it is not")
+
+    -- A foreign MiniMapTrackingFrame must not capture any of this. That name is
+    -- dead in the 1.15.9 client, but addons of the sort HelloUI replaces create
+    -- it, and both the frame lookup and the region anchors would follow it.
+    local decoy = Frame.new("MiniMapTrackingFrame", _G.UIParent)
+    trackingBorder:SetSize(64, 64)
+    ns.Minimap:Apply()
+    eq(trackingBorder:GetWidth(), 52, "sizes the real button even with a decoy global present")
+    eq(select(2, trackingBorder:GetPoint(1)), tracking, "and anchors the ring to the real button")
+    eq(#decoy._points, 0, "leaving the decoy entirely alone")
+    _G.MiniMapTrackingFrame = nil
+    ns.Minimap:Apply()
+
     -- Nudgeable, because which rim slots other addons' buttons have taken is
     -- not knowable from in here.
     ns.Minimap:NudgeTracking(90)
@@ -1065,6 +1204,34 @@ do
     ok(math.abs(rimR - lfgR) < 0.5, "a nudge moves it round the rim, not off it")
     ok(ry < ty, "and 90 degrees is further down than 30")
     ns.Minimap:NudgeTracking(30)
+
+    -- Restoration, deliberately placed after all those repeated Applies: it is the
+    -- SECOND and later Apply that catches an original recorded unconditionally,
+    -- because by then HelloUI's own 52 would be on file as "Blizzard's".
+    ns.Config:Set("fixTrackingIcon", false)
+    ns.Minimap:Apply()
+    eq(trackingBorder:GetWidth(), 64, "ring handed back to Blizzard's 64 when switched off")
+    local rp1, _, rp2, rx1, ry1 = trackingBorder:GetPoint(1)
+    ok(rp1 == "TOPLEFT" and rp2 == "TOPLEFT" and rx1 == 0 and ry1 == 0,
+        "at Blizzard's flush anchor, not HelloUI's inset")
+    eq(trackingIcon:GetWidth(), 24, "icon back to 24")
+    local _, _, _, rix, riy = trackingIcon:GetPoint(1)
+    ok(rix == 2 and riy == -2, "with Blizzard's (2,-2) nudge back, which its 64 ring needs")
+
+    -- Off, on, off again: the saved originals must survive being re-enabled.
+    ns.Config:Set("fixTrackingIcon", true)
+    ns.Minimap:Apply()
+    eq(trackingBorder:GetWidth(), 52, "re-enabling matches the eye again")
+    ns.Config:Set("fixTrackingIcon", false)
+    ns.Minimap:Apply()
+    eq(trackingBorder:GetWidth(), 64, "and the second restore still knows Blizzard's value")
+
+    -- Left ENABLED for everything downstream. Leaving it off here would silently
+    -- disable the feature for the rest of the suite and make the master-switch
+    -- assertion below measure an already-restored button.
+    ns.Config:Set("fixTrackingIcon", true)
+    ns.Minimap:Apply()
+    eq(trackingBorder:GetWidth(), 52, "and the feature is back on for the rest of the run")
 
     -- The whole point: Blizzard leaves the frame hidden at login even with
     -- tracking active, so positioning it correctly achieves nothing on its own.
@@ -1163,6 +1330,7 @@ eq(_G.ActionButton1:GetNormalTexture()._alpha, 0.5, "button border back to Blizz
 eq(_G._statusContainer:GetWidth(), 1024, "status bar width restored when disabled")
 eq(_G._statusContainer.StandaloneFrameTexture2:GetWidth(), 240, "and its border art too")
 eq(mainMenuBar:IsShown(), true, "bar art restored when disabled")
+eq(trackingBorder:GetWidth(), 64, "tracking ring handed back to Blizzard when disabled")
 eq(chat:GetWidth(), 400, "chat still untouched")
 
 _G.SlashCmdList["HELLOUI"]("on")
@@ -1170,7 +1338,11 @@ eq(ns.Config:Get("enabled"), true, "/hui on re-enables")
 eq(_G.ActionButton1.HotKey._alpha, 0, "keybind text hidden again")
 
 print("\nslash commands")
-for _, cmd in ipairs({ "", "status", "apply", "char", "char clear", "char barsoff bar3", "char barsoff nonsense", "help", "reset" }) do
+-- minimapprobe and tracking are in here because both print formatted numbers off
+-- frames that may be absent, and a bare %s on a nil is a real hazard in 5.1.
+for _, cmd in ipairs({ "", "status", "apply", "char", "char clear", "char barsoff bar3",
+                       "char barsoff nonsense", "minimapprobe", "tracking", "tracking 45",
+                       "clock 1 -1", "help", "reset" }) do
     local success, err = pcall(_G.SlashCmdList["HELLOUI"], cmd)
     ok(success, ("/hui %s runs without error%s"):format(cmd, success and "" or ": " .. tostring(err)))
 end
