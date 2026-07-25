@@ -189,6 +189,7 @@ function Frame:CreateTexture(name)
     t.GetVertexColor = function(s) return s._vertex[1], s._vertex[2], s._vertex[3], s._vertex[4] end
     t.SetDesaturated = function(s, v) s._desat = v and true or false; return true end
     t.SetTexture = function(s, tex) s._tex = tex end
+    t.GetTexture = function(s) return s._tex end
     self._regions[#self._regions + 1] = t
     return t
 end
@@ -657,6 +658,11 @@ pcb.Text:SetPoint("CENTER", pcb, "CENTER", 0, 0)
 pcb.Flash = pcb:CreateTexture()
 pcb.BorderShield = pcb:CreateTexture()
 pcb.BorderShield:Hide()
+-- The declared files, because blanking a texture is how the border art is
+-- suppressed and putting it back means knowing what it was.
+pcb.Border:SetTexture("Interface\\CastingBar\\UI-CastingBar-Border")
+pcb.BorderShield:SetTexture("Interface\\CastingBar\\UI-CastingBar-Small-Shield")
+pcb.Flash:SetTexture("Interface\\CastingBar\\UI-CastingBar-Flash")
 -- The mixin re-applies a per-bar-type colour on every cast and state change,
 -- which is the one thing here that fights a tint set once.
 pcb._barColor = { 1, 0.7, 0 }
@@ -1402,8 +1408,19 @@ do
     -- The flat look: Blizzard's border art off, a backdrop behind the fill, the
     -- name to the left and a countdown on the right. Same shape as hideBarArt -
     -- nothing here ships a texture.
-    eq(pcb.Border:IsShown(), false, "cast bar border art hidden")
-    eq(pcb.Flash:IsShown(), false, "and the flash that lights the same outline")
+    eq(pcb.Border:GetTexture(), nil, "cast bar border art blanked")
+    eq(pcb.Flash:GetTexture(), nil, "and the flash that lights the same outline")
+    eq(pcb.BorderShield:GetTexture(), nil, "and the uninterruptible shield")
+
+    -- THE REGRESSION. Hiding these was not enough: on a completed cast Blizzard
+    -- calls Flash:Show(), then plays FlashAnim, which animates the alpha to 1 and
+    -- leaves it there. A Hide loses to the Show and a SetAlpha loses to the
+    -- animation - so the outline flashed back for about a second on every cast
+    -- that finished. A blanked texture draws nothing no matter who shows it.
+    pcb.Flash:SetAlpha(0)
+    pcb.Flash:Show()
+    pcb.Flash:SetAlpha(1)
+    eq(pcb.Flash:GetTexture(), nil, "and it stays blank when Blizzard shows and lights it")
     ok(pcb.HelloUIBackdrop ~= nil and pcb.HelloUIBackdrop:IsShown(), "flat backdrop behind the fill")
     ok(pcb.HelloUIBackdrop._color and pcb.HelloUIBackdrop._color[4] == 0.55, "and it is actually painted")
     local tp, _, _, tx = pcb.Text:GetPoint(1)
@@ -1442,7 +1459,9 @@ do
     -- Switchable and restorable, like everything else here.
     ns.Config:Set("castBarStyle", false)
     ns:ApplyAll()
-    eq(pcb.Border:IsShown(), true, "border art handed back when switched off")
+    eq(pcb.Border:GetTexture(), "Interface\\CastingBar\\UI-CastingBar-Border",
+        "border art handed back when switched off")
+    eq(pcb.Flash:GetTexture(), "Interface\\CastingBar\\UI-CastingBar-Flash", "flash too")
     eq(pcb.HelloUIBackdrop:IsShown(), false, "backdrop hidden")
     local rp, _, _, rx = pcb.Text:GetPoint(1)
     ok(rp == "CENTER" and rx == 0, "and the spell name re-centred")
@@ -1450,7 +1469,7 @@ do
     eq(pcb.Text:GetFontObject(), "GameFontHighlight", "and Blizzard's own font handed back")
     ns.Config:Set("castBarStyle", true)
     ns:ApplyAll()
-    eq(pcb.Border:IsShown(), false, "and restyled when switched back on")
+    eq(pcb.Border:GetTexture(), nil, "and restyled when switched back on")
     -- Asserted after the off/on cycle on purpose: a texture is created shown, so
     -- checking it on the first pass passes even for code that never shows it.
     -- Only the second styling can tell the difference.

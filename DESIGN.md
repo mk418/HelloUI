@@ -394,9 +394,15 @@ look is the `hideBarArt` pattern: hide the 256x64 border and its flash, put a fl
 colour behind the fill, move the spell name left. The countdown is the one added
 thing, because this build has no `CastTimeText` at all — `UpdateCastTimeTextShown`
 opens with `if not self.CastTimeText then return end` and the Classic template
-declares none. The colour is the only part needing re-assertion:
-`UpdateBarFillTexture` re-applies a per-bar-type colour on every cast, hooked on
-the instance. Size and position stay Edit Mode's.
+declares none. Two things fight back and are handled differently. The colour is re-applied by
+`UpdateBarFillTexture` on every cast, so it is re-asserted from a hook on the
+instance. The border art is worse: a completed cast runs `Flash:Show()` and then
+`FlashAnim`, an `<Alpha ... setToFinalAlpha="true">` group that drives the same
+256x64 outline to full alpha and leaves it there — so `Hide()` loses to the Show
+and `SetAlpha(0)` loses to the animation, and the outline flashed back for a
+second on every finished cast. The regions are therefore **blanked**
+(`SetTexture(nil)`), not hidden: Blizzard's Show, alpha and animation all still
+run and all still paint nothing. Files are remembered so the art comes back. Size and position stay Edit Mode's.
 
 **Button text stripping enumerates Blizzard's bars by name.** Never a global
 button sweep, and never "blank every FontString on every button". HelloWarrior

@@ -99,9 +99,9 @@ local function remember(f)
         point, rel, relPoint, x, y = f.Text:GetPoint(1)
     end
     saved[f] = {
-        border = f.Border and f.Border:IsShown(),
-        shield = f.BorderShield and f.BorderShield:IsShown(),
-        flash = f.Flash and f.Flash:IsShown(),
+        borderTex = f.Border and f.Border.GetTexture and f.Border:GetTexture(),
+        shieldTex = f.BorderShield and f.BorderShield.GetTexture and f.BorderShield:GetTexture(),
+        flashTex = f.Flash and f.Flash.GetTexture and f.Flash:GetTexture(),
         textPoint = point, textRel = rel, textRelPoint = relPoint,
         textX = x, textY = y,
         justify = f.Text and f.Text.GetJustifyH and f.Text:GetJustifyH(),
@@ -142,12 +142,31 @@ local function applyStyle(f)
     remember(f)
     ensureParts(f)
 
-    if f.Border then f.Border:Hide() end
-    if f.BorderShield then f.BorderShield:Hide() end
-    -- The flash is the same 256x64 border shape lighting up on a completed cast.
-    -- Kept hidden with the border, or a successful cast draws a glowing outline
-    -- around art that is no longer there.
-    if f.Flash then f.Flash:Hide() end
+    -- BLANKED, NOT HIDDEN, and the difference is the whole bug this fixes.
+    -- Hiding the border art worked right up until a cast COMPLETED, at which
+    -- point the outline flashed back for about a second:
+    --
+    --   self.Flash:SetAlpha(0.0); self.Flash:Show();   CastingBarFrame.lua:453,571
+    --   if self.FlashAnim then self.FlashAnim:Play() end                    :743
+    --   <AnimationGroup parentKey="FlashAnim" setToFinalAlpha="true">
+    --       <Alpha childKey="Flash" fromAlpha="0" toAlpha="1" duration="0.08"/>
+    --
+    -- UI-CastingBar-Flash is the same 256x64 border shape, so a completed cast
+    -- re-Shows it, animates it to full alpha and - setToFinalAlpha - leaves it
+    -- there for the fade-out. Hide() loses to the Show, and SetAlpha(0) loses to
+    -- the animation, which owns that property outright.
+    --
+    -- A texture with no file draws nothing no matter who shows it or what its
+    -- alpha is, so Blizzard's Show, its SetAlpha and its animation all still run
+    -- and all still paint nothing. The file is remembered so switching the style
+    -- off puts the real art back. Same treatment for the other two, so nothing
+    -- here depends on which regions Blizzard happens to toggle.
+    local function blank(tex)
+        if tex and tex.SetTexture then tex:SetTexture(nil) end
+    end
+    blank(f.Border)
+    blank(f.BorderShield)
+    blank(f.Flash)
 
     if f.HelloUIBackdrop then f.HelloUIBackdrop:Show() end
     if f.HelloUITimer then f.HelloUITimer:Show() end
@@ -169,9 +188,11 @@ local function restoreStyle(f)
     local s = saved[f]
     if not s then return end
 
-    if f.Border and s.border then f.Border:Show() end
-    if f.BorderShield and s.shield then f.BorderShield:Show() end
-    if f.Flash and s.flash then f.Flash:Show() end
+    -- The art comes back by file. Shown-state is deliberately not restored:
+    -- HelloUI never touched it, so it is whatever Blizzard last set it to.
+    if f.Border and s.borderTex then f.Border:SetTexture(s.borderTex) end
+    if f.BorderShield and s.shieldTex then f.BorderShield:SetTexture(s.shieldTex) end
+    if f.Flash and s.flashTex then f.Flash:SetTexture(s.flashTex) end
 
     if f.HelloUIBackdrop then f.HelloUIBackdrop:Hide() end
     if f.HelloUITimer then f.HelloUITimer:Hide() end
