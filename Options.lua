@@ -150,8 +150,15 @@ local borderCheck = SettingCheck("Borders", "Solid borders on every button",
     "at all, so this takes it to full alpha - Blizzard's own texture, just " ..
     "actually visible.")
 
+local emptyCheck = SettingCheck("EmptySlots", "Show empty action slots",
+    borderCheck, "BOTTOMLEFT", 0, -4, "showEmptyButtons",
+    "On, bars keep their full rectangular shape - which is what makes the " ..
+    "side blocks read as 4x3. Off, Blizzard hides empty slots, so a bar you " ..
+    "have not filled vanishes instead of showing a grid of empty squares. " ..
+    "Run /hui layout afterwards - this one lives in the Edit Mode layout.")
+
 local offLabel = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-offLabel:SetPoint("TOPLEFT", borderCheck, "BOTTOMLEFT", 2, -8)
+offLabel:SetPoint("TOPLEFT", emptyCheck, "BOTTOMLEFT", 2, -8)
 offLabel:SetText("Bars switched off:")
 
 -- The eight numbered bars in one tight row - their labels are single digits,

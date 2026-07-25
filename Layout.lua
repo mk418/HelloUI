@@ -325,9 +325,14 @@ function Layout:Build()
                 -- Blizzard's preset has AlwaysShowButtons off, which hides
                 -- empty slots - so a mostly-empty bar renders as one or two
                 -- stray buttons rather than the 4x3 block the arrangement
-                -- assumes, and the flanks look broken rather than empty.
-                -- DragonflightUI's own default is alwaysShow = true.
-                setSetting(entry, S.AlwaysShowButtons, 1)
+                -- assumes. DragonflightUI's own default is alwaysShow = true,
+                -- which is the shape the reference screenshot shows.
+                --
+                -- It cuts both ways though: on a bar you have not filled, a
+                -- full grid of empty slots is more clutter than the stray
+                -- buttons were, so it is a setting.
+                setSetting(entry, S.AlwaysShowButtons,
+                    Config:Enabled("showEmptyButtons") and 1 or 0)
             end
 
             if def.statusSize ~= nil and Enum.EditModeStatusTrackingBarSetting then

@@ -33,6 +33,14 @@ local accountDefaults = {
     -- all. Full alpha, using Blizzard's own texture. See Buttons.lua.
     buttonBorders = true,
 
+    -- Show empty action slots. On, the bars keep their full shape - which is
+    -- what makes the flanking blocks read as 4x3 rather than as a couple of
+    -- stray buttons, and matches DragonflightUI's alwaysShow default. Off,
+    -- Blizzard hides empty slots, so a bar you have not filled disappears
+    -- instead of showing a grid of empty squares. Applies through the Edit
+    -- Mode layout, so it needs `/hui layout` to take effect.
+    showEmptyButtons = true,
+
     -- Bars.lua. DragonflightUI's own base action bar set: bars 1-5 shown,
     -- 6-8 off (its defaults have activate=false for those three), stance and
     -- pet shown. This replaces the earlier profile-derived default, which had

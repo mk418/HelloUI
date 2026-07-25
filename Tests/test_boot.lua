@@ -806,6 +806,26 @@ do
         end
     end
     eq(sideChecked, 2, "both side blocks checked")
+
+    -- Empty slots are a setting: on keeps the block shape, off lets Blizzard
+    -- hide unfilled slots so an empty bar vanishes rather than showing a grid.
+    local alwaysShow
+    for _, st in ipairs(mainBar.settings) do
+        if st.setting == 9 then alwaysShow = st.value end
+    end
+    eq(alwaysShow, 1, "empty slots shown by default, so bars keep their shape")
+    ns.Config:Set("showEmptyButtons", false)
+    local sys2 = ns.Layout:Build()
+    ns.Config:Set("showEmptyButtons", true)
+    local off
+    for _, e in ipairs(sys2) do
+        if e.system == 1 and e.systemIndex == 1 then
+            for _, st in ipairs(e.settings) do
+                if st.setting == 9 then off = st.value end
+            end
+        end
+    end
+    eq(off, 0, "and the setting actually turns them off")
 end
 
 -- Re-applying refreshes rather than duplicating, and stays active.
