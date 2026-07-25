@@ -412,6 +412,17 @@ re-applied from a hook on `SetLook`. It is a *partial* undo, which is what made
 it hard to see: justification and the countdown survive it, so the result read as
 a styled bar whose border had inexplicably returned. Size and position stay Edit Mode's.
 
+**The options panel scrolls.** The Settings canvas is a fixed ~580 units tall
+(UIParent is always 768, whatever the resolution) and this panel's left column
+alone exceeds that — and the canvas does not clip, so the overflow drew straight
+over the game. Everything is parented to a scroll child inside a
+`UIPanelScrollFrameTemplate`, the same wrapper HelloHealer's settings panel uses.
+The scroll child's height is measured from the lowest element on each refresh
+rather than hard-coded, since the status line grows when the character has
+overrides. A widget parented to the panel instead of the scroll child escapes
+the scroll frame and floats over the game again, so the harness asserts the
+panel has exactly one child.
+
 **Button text stripping enumerates Blizzard's bars by name.** Never a global
 button sweep, and never "blank every FontString on every button". HelloWarrior
 paints its own compact hotkey label onto its buttons as `btn._hwKeyLabel` (a

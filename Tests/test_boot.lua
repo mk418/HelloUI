@@ -63,6 +63,10 @@ function Frame:SetAllPoints(rel)
     self._points = { { p = "ALLPOINTS", rel = rel or self._parent } }
 end
 function Frame:SetColorTexture(r, g, b, a) self._color = { r, g, b, a } end
+-- Real, because "is this widget inside the scroll frame" is the assertion that
+-- keeps the options panel from overflowing the Settings canvas again.
+function Frame:SetScrollChild(c) self._scrollChild = c end
+function Frame:GetScrollChild() return self._scrollChild end
 function Frame:GetJustifyH() return self._justify end
 -- Recorded: the cast bar's spell name is shrunk to stop its ink standing proud
 -- of a 13px bar, so "which font object" is the whole assertion.
@@ -1719,6 +1723,32 @@ ns.Config:Set("enabled", true)
 ns:ApplyAll()
 eq(settingValues["PROXY_SHOW_ACTIONBAR_3"], true, "and re-enabling re-applies")
 settingValues["PROXY_SHOW_ACTIONBAR_3"] = true
+
+-- The options panel outgrew the Settings canvas - which does not clip, so the
+-- last three controls drew over the game instead. Everything lives in a scroll
+-- child now, and the way that regresses is somebody adding a widget parented to
+-- the panel, which escapes the scroll frame and floats over the game again.
+do
+    local optPanel = _G["HelloUIOptionsPanel"]
+    local optScroll = _G["HelloUIOptionsScroll"]
+    ok(optScroll ~= nil, "the options panel is wrapped in a scroll frame")
+    local scrollChild = optScroll and optScroll:GetScrollChild()
+    ok(scrollChild ~= nil, "which has a scroll child to put the controls in")
+
+    -- The panel itself carries the scroll frame and nothing else.
+    local strays = {}
+    for _, child in ipairs({ optPanel:GetChildren() }) do
+        if child ~= optScroll then strays[#strays + 1] = child:GetName() or "unnamed" end
+    end
+    ok(#strays == 0, ("no control escapes the scroll frame%s"):format(
+        #strays > 0 and (" - found " .. table.concat(strays, ", ")) or ""))
+
+    -- And a control picked from the far end of the panel really is inside it,
+    -- so the check above cannot pass by the panel simply being empty.
+    local deep = _G["HelloUIOptLayoutPerChar"]
+    ok(deep ~= nil and deep:GetParent() == scrollChild,
+        "and the last control in the panel is inside the scroll child")
+end
 
 -- Unticking a nested checkbox must store false, not delete the key: Config's
 -- applyDefaults recurses into these tables and would resurrect the default on

@@ -8,6 +8,33 @@ local Config = ns.Config
 local panel = CreateFrame("Frame", "HelloUIOptionsPanel")
 panel.name = "HelloUI"
 
+--------------------------------------------------------------------------
+-- Scroll wrapper
+--
+-- The Settings canvas is a fixed height - about 580 units, whatever the
+-- resolution, since UIParent is always 768 tall - and this panel's left column
+-- alone is taller than that. Anything past the bottom is not clipped by the
+-- canvas: it draws over the game, which is what "the settings do not fit"
+-- looked like on screen.
+--
+-- Rebalancing the columns would have bought one release: the panel gained two
+-- checkboxes in a single afternoon. A scroll wrapper is what HelloHealer's
+-- settings panel already does for the same reason, so it is also the shape the
+-- family expects.
+--
+-- Everything below is parented to `content`, never to `panel`. A widget
+-- attached to the panel instead escapes the scroll frame and floats over the
+-- game again - the harness asserts against exactly that.
+--------------------------------------------------------------------------
+
+local scroll = CreateFrame("ScrollFrame", "HelloUIOptionsScroll", panel, "UIPanelScrollFrameTemplate")
+scroll:SetPoint("TOPLEFT", 8, -8)
+scroll:SetPoint("BOTTOMRIGHT", -28, 8)
+
+local content = CreateFrame("Frame", nil, scroll)
+content:SetSize(560, 760)
+scroll:SetScrollChild(content)
+
 local checks = {}
 
 -- Every control writes straight into the settings table and re-applies, so
@@ -27,7 +54,7 @@ end
 --------------------------------------------------------------------------
 
 local function MakeCheck(name, label, anchor, relPoint, x, y, get, set, tooltip)
-    local cb = CreateFrame("CheckButton", name, panel, "UICheckButtonTemplate")
+    local cb = CreateFrame("CheckButton", name, content, "UICheckButtonTemplate")
     cb:SetSize(26, 26)
     cb:SetPoint("TOPLEFT", anchor, relPoint, x, y)
     local text = _G[name .. "Text"] or cb.Text
@@ -102,7 +129,7 @@ end
 -- belong to Edit Mode.
 
 local function Header(text, anchor, relPoint, x, y)
-    local fs = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
+    local fs = content:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
     fs:SetPoint("TOPLEFT", anchor, relPoint, x, y)
     fs:SetText(text)
     return fs
@@ -112,11 +139,11 @@ end
 -- Layout
 --------------------------------------------------------------------------
 
-local title = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
+local title = content:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
 title:SetPoint("TOPLEFT", 16, -16)
 title:SetText("HelloUI")
 
-local subtitle = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+local subtitle = content:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
 subtitle:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -8)
 subtitle:SetWidth(560)
 subtitle:SetJustifyH("LEFT")
@@ -157,7 +184,7 @@ local emptyCheck = SettingCheck("EmptySlots", "Show empty action slots",
     "have not filled vanishes instead of showing a grid of empty squares. " ..
     "Run /hui layout afterwards - this one lives in the Edit Mode layout.")
 
-local offLabel = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+local offLabel = content:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
 offLabel:SetPoint("TOPLEFT", emptyCheck, "BOTTOMLEFT", 2, -8)
 offLabel:SetText("Bars switched off:")
 
@@ -213,7 +240,7 @@ local castStyleCheck = SettingCheck("CastStyle", "Flat cast bar (no border art, 
     "spell name on the left and a countdown on the right. The bar's size and " ..
     "position stay Edit Mode's.")
 
-local chatNote = panel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+local chatNote = content:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
 chatNote:SetPoint("TOPLEFT", castStyleCheck, "BOTTOMLEFT", 4, -10)
 chatNote:SetWidth(260)
 chatNote:SetJustifyH("LEFT")
@@ -259,7 +286,7 @@ local todCheck = SettingCheck("TimeOfDay", "Hide the time-of-day dial",
     "The sun/moon icon on the minimap ring. On Classic Era it is not a " ..
     "calendar button - it has no click action at all.")
 
-local minimapNote = panel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+local minimapNote = content:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
 minimapNote:SetPoint("TOPLEFT", todCheck, "BOTTOMLEFT", 4, -4)
 minimapNote:SetWidth(260)
 minimapNote:SetJustifyH("LEFT")
@@ -295,7 +322,7 @@ local perCharCheck = CharCheck("LayoutPerChar", "...but give THIS character its 
     "and switching leaves the old one in place - delete it in Edit Mode if you " ..
     "want it gone.")
 
-local resetBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+local resetBtn = CreateFrame("Button", nil, content, "UIPanelButtonTemplate")
 resetBtn:SetSize(140, 22)
 resetBtn:SetPoint("TOPLEFT", perCharCheck, "BOTTOMLEFT", 2, -18)
 resetBtn:SetText("Reset settings")
@@ -306,7 +333,7 @@ resetBtn:SetScript("OnClick", function()
     Options:Refresh()
 end)
 
-local clearCharBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+local clearCharBtn = CreateFrame("Button", nil, content, "UIPanelButtonTemplate")
 clearCharBtn:SetSize(170, 22)
 clearCharBtn:SetPoint("LEFT", resetBtn, "RIGHT", 8, 0)
 clearCharBtn:SetText("Clear character overrides")
@@ -320,7 +347,7 @@ end)
 -- Applying the layout is an action, not a setting: it writes an Edit Mode
 -- layout once and then HelloUI is not involved. A checkbox would imply
 -- HelloUI keeps enforcing it, which is exactly what it does not do.
-local layoutBtn = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+local layoutBtn = CreateFrame("Button", nil, content, "UIPanelButtonTemplate")
 layoutBtn:SetSize(220, 22)
 layoutBtn:SetPoint("TOPLEFT", resetBtn, "BOTTOMLEFT", 0, -8)
 layoutBtn:SetText("Apply / reset the bar layout")
@@ -337,7 +364,7 @@ layoutBtn:SetScript("OnEnter", function(self)
 end)
 layoutBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
-local status = panel:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+local status = content:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
 status:SetPoint("TOPLEFT", layoutBtn, "BOTTOMLEFT", 0, -14)
 status:SetWidth(560)
 status:SetJustifyH("LEFT")
@@ -346,6 +373,22 @@ status:SetSpacing(2)
 --------------------------------------------------------------------------
 -- Refresh
 --------------------------------------------------------------------------
+
+-- The scroll child's height IS the scrollbar's range, so a constant would
+-- either cut the last control off or scroll into empty space. Measured from the
+-- lowest element instead - the status text, which is the one thing here that
+-- changes height, since it grows a line when this character has overrides.
+--
+-- No feedback loop: the status text's position comes from the anchor chain down
+-- from the content frame's TOP, so it does not move when the height below it
+-- changes. Only runs once the panel has been shown and laid out, hence the
+-- guard: before that the rects are nil and the initial size stands.
+local function fitContent()
+    if not (content.GetTop and status.GetBottom) then return end
+    local top, bottom = content:GetTop(), status:GetBottom()
+    if not (top and bottom) then return end
+    content:SetHeight(math.max(200, top - bottom + 24))
+end
 
 function Options:Refresh()
     for _, cb in ipairs(checks) do
@@ -385,6 +428,9 @@ function Options:Refresh()
     end
 
     status:SetText(table.concat(lines, "\n"))
+
+    -- After the text is set, so a two-line status is measured as two lines.
+    fitContent()
 end
 
 panel:SetScript("OnShow", function() Options:Refresh() end)
