@@ -144,6 +144,17 @@ function Config:Init()
     HelloUICharDB = HelloUICharDB or {}
     applyDefaults(HelloUIDB, accountDefaults)
     applyDefaults(HelloUICharDB, charDefaults)
+
+    -- One-time: replace the profile-derived bar set with DragonflightUI's
+    -- base one. applyDefaults only ever FILLS IN missing keys, so changing
+    -- the default could not remove the `bar5 = true` an existing install had
+    -- already saved - the new default quietly added 6/7/8 on top of it and
+    -- the result was bars 5 through 8 all dark. Defaults cannot migrate
+    -- state; migrations have to.
+    if not HelloUIDB.barsBaseV2 then
+        HelloUIDB.barsBaseV2 = true
+        HelloUIDB.barsOff = copy(accountDefaults.barsOff)
+    end
 end
 
 --------------------------------------------------------------------------
@@ -219,6 +230,11 @@ end
 function Config:ResetAccount()
     HelloUIDB = {}
     applyDefaults(HelloUIDB, accountDefaults)
+    -- Reset already installs the base bar set, so the migration has nothing
+    -- left to do. Marking it done matters: without this the latch is gone and
+    -- the migration re-runs at the next login, wiping any bar the player
+    -- changed in between.
+    HelloUIDB.barsBaseV2 = true
 end
 
 function Config:ResetChar()

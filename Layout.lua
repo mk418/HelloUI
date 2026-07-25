@@ -91,7 +91,7 @@ end
 -- dismissal per session.
 
 -- Raw Edit Mode values, not display values.
-local ICON_SIZE = 3     -- 3 * 10 + 50 = 80%
+local ICON_SIZE = 5     -- 5 * 10 + 50 = 100%
 local ICON_PADDING = 0  -- 0 *  1 +  2 = 2px
 
 local function indices()
@@ -113,9 +113,9 @@ end
 -- used - and a gap that is slightly too big reads as a choice, where one
 -- pixel too small reads as a bug. Nudge any of it in Edit Mode afterwards;
 -- that is the point of writing a layout rather than enforcing one.
-local ROW_STEP = 40    -- vertical pitch of the stacked bars
+local ROW_STEP = 48    -- vertical pitch of the stacked bars
 local BASE_Y = 24      -- bottom row's height above the screen edge
-local FLANK_X = 330    -- how far the 4x3 blocks sit from centre
+local FLANK_X = 400    -- how far the 4x3 blocks sit from centre
 local STATUS_Y = 4     -- the XP/reputation bars, under the stack
 
 -- Geometry is measured off DragonflightUI's own default screenshot: three
@@ -123,10 +123,13 @@ local STATUS_Y = 4     -- the XP/reputation bars, under the stack
 -- small stance/pet bar centred above the stack, and the XP/reputation bars
 -- directly beneath it rather than wherever Blizzard's manager leaves them.
 --
--- ROW_STEP is the button size plus a hair: 45px at 80% is 36, so 40 gives the
--- snug spacing the screenshot shows while still clearing the icon. FLANK_X is
--- derived rather than eyeballed - half the twelve-button stack (6 x 38 = 228)
--- plus half a four-button block (76) plus a ~26px gap.
+-- Buttons are at 100%, not the 80% first tried. DragonflightUI's own
+-- buttonScale is 0.8, but that scales ITS buttons, and matching the number
+-- rather than the result made these read as small. ROW_STEP is then the
+-- button size plus a hair - 45 + 3 - which is both bigger buttons and less
+-- air between the rows. FLANK_X is derived rather than eyeballed: half the
+-- twelve-button stack (6 x 47 = 282) plus half a four-button block (94) plus
+-- a ~24px gap.
 local function geometry()
     local I = indices()
     if not I then return nil end
@@ -165,6 +168,21 @@ local function geometry()
         { system = BAR, index = I.PetActionBar, rows = 1,
           point = "BOTTOM", relativeTo = "UIParent", relativePoint = "BOTTOM", x = 0, y = BASE_Y + ROW_STEP * 3 },
     }
+
+    -- The micro menu and the bag bar. Both are Edit Mode systems, and left
+    -- at Blizzard's defaults they sit along the bottom centre-right, straight
+    -- on top of the reputation bar once that has been pinned under the stack.
+    -- Parked in the bottom-right corner, bags below the menu.
+    local MICRO = Enum.EditModeSystem.MicroMenu
+    local BAGS = Enum.EditModeSystem.Bags
+    if BAGS then
+        g[#g + 1] = { system = BAGS, index = nil,
+            point = "BOTTOMRIGHT", relativeTo = "UIParent", relativePoint = "BOTTOMRIGHT", x = -4, y = 4 }
+    end
+    if MICRO then
+        g[#g + 1] = { system = MICRO, index = nil,
+            point = "BOTTOMRIGHT", relativeTo = "UIParent", relativePoint = "BOTTOMRIGHT", x = -4, y = 44 }
+    end
 
     -- The XP and reputation bars. Blizzard's preset anchors these to
     -- StatusTrackingBarManager, which leaves them stranded once the main bar

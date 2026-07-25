@@ -649,7 +649,7 @@ do
         end
     end
     ok(wellFormed, "settings stayed an array of {setting,value} pairs")
-    eq(size, 3, "icon size raw 3 (= 80%)")
+    eq(size, 5, "icon size raw 5 (= 100%)")
     eq(pad, 0, "icon padding raw 0 (= 2px)")
     eq(rows, 1, "main bar is one row")
     eq(mainBar.anchorInfo.relativeTo, "UIParent", "main bar pinned to UIParent")
@@ -722,7 +722,7 @@ do
     for _, st in ipairs(mainBar.settings) do
         if st.setting == 3 then size = st.value end
     end
-    eq(size, 3, "reset restores the shipped icon size")
+    eq(size, 5, "reset restores the shipped icon size")
 end
 
 -- Per-character mode: a separate, character-typed, character-named layout.
@@ -874,6 +874,35 @@ eq(HelloUIDB.barsOff.bar5, false, "and it survives applyDefaults on the next log
 barBox:SetChecked(true)
 barBox:GetScript("OnClick")(barBox)
 eq(HelloUIDB.barsOff.bar5, true, "re-ticking stores true")
+
+-- An existing install carries the OLD profile-derived bar set. applyDefaults
+-- only fills in missing keys, so changing the default could not remove a
+-- saved `bar5 = true` - it just added 6/7/8 on top and the player watched
+-- bars 5 through 8 all go dark. This is that exact database.
+do
+    HelloUIDB = { barsOff = { bar5 = true } }
+    ns.Config:Init()
+    eq(HelloUIDB.barsOff.bar5, nil, "migration clears the old profile-derived bar5")
+    eq(HelloUIDB.barsOff.bar6, true, "and installs the base set")
+    ok(HelloUIDB.barsBaseV2 == true, "latched so it runs once")
+
+    -- Second login must not touch a deliberate change made since.
+    HelloUIDB.barsOff.bar5 = true
+    ns.Config:Init()
+    eq(HelloUIDB.barsOff.bar5, true, "a later change is not re-migrated away")
+    ns.Config:ResetAccount()
+end
+
+-- The bar-set migration must not re-run after /hui reset, or it wipes any
+-- bar the player changed since.
+do
+    ns.Config:ResetAccount()
+    ok(HelloUIDB.barsBaseV2 == true, "reset marks the bar migration done")
+    HelloUIDB.barsOff.bar2 = true
+    ns.Config:Init()
+    eq(HelloUIDB.barsOff.bar2, true, "a bar hidden after a reset survives the next login")
+    HelloUIDB.barsOff.bar2 = nil
+end
 
 -- The remembered xpBarText must live in saved variables, or a /reload makes
 -- the addon restore its own value instead of the player's.
