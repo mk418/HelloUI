@@ -107,15 +107,12 @@ local accountDefaults = {
     -- stranded in the corner of the screen next to the player frame.
     fixTrackingIcon = true,
 
-    -- OFF, because it did not work. Blizzard anchors the clock's text at a
-    -- half-pixel vertical offset and rounding it to the grid seemed obviously
-    -- right, but it made the clock look worse in practice, and the reasoning
-    -- does not survive scrutiny: the minimap is scaled to 110%, so an offset
-    -- of 2 renders at 2.2 screen pixels and no integer offset lands on the
-    -- grid anyway. Blizzard's 1.5 may also be optical rather than accidental.
-    -- Kept behind a setting rather than deleted, since it may be worth
-    -- something at 100% where the arithmetic actually works.
-    fixClockText = false,
+    -- Compensates the clock's scale so its text renders at native size and on
+    -- the pixel grid even with the minimap scaled up, and rounds Blizzard's
+    -- half-pixel anchor once that is true. See Minimap.lua - the first attempt
+    -- rounded the anchor alone, which could not work while the subtree was at
+    -- 110%.
+    fixClockText = true,
 
     -- Minimap size, as Edit Mode's raw slider value: 5 is 100%, 6 is 110%,
     -- each step 10%. Applied through the layout.

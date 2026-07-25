@@ -46,7 +46,7 @@ local NOOP_METHODS = {
     "SetFrameStrata", "SetFrameLevel", "SetJustifyH", "SetJustifyV", "SetSpacing", "SetMinMaxValues", "SetValueStep", "SetValue",
     "SetObeyStepOnDrag", "SetOwner", "AddLine", "SetTexCoord", "SetDrawLayer",
     "RegisterForClicks", "RegisterForDrag", "SetMovable", "SetClampedToScreen",
-    "SetUserPlaced", "SetToplevel", "SetScale", "SetFont", "GetFont",
+    "SetUserPlaced", "SetToplevel", "SetFont", "GetFont",
     "SetNormalTexture", "SetHighlightTexture", "SetPushedTexture",
     "SetAttribute", "SetID", "GetID", "Raise", "Lower",
     "SetHitRectInsets", "SetIgnoreParentAlpha", "SetPropagateMouseClicks",
@@ -104,7 +104,15 @@ function Frame:SetHeight(h) self._h = h end
 function Frame:SetParent(p) self._parent = p end
 function Frame:GetWidth() return self._w end
 function Frame:GetHeight() return self._h end
-function Frame:GetEffectiveScale() return 1 end
+function Frame:SetScale(sc) self._scale = sc end
+function Frame:GetScale() return self._scale or 1 end
+function Frame:GetEffectiveScale()
+    -- Effective scale is own scale times the parent chain's.
+    local sc = self._scale or 1
+    local p = self._parent
+    while p do sc = sc * (p._scale or 1); p = p._parent end
+    return sc
+end
 function Frame:GetLeft() return 0 end
 function Frame:GetBottom() return 0 end
 function Frame:ClearAllPoints() self._points = {} end
@@ -490,11 +498,17 @@ local backdrop = Frame.new("MinimapBackdrop", minimap)
 local lfg = Frame.new("LFGMinimapFrame", backdrop)
 lfg:SetSize(33, 33)
 lfg:SetPoint("TOPLEFT", backdrop, "TOPLEFT", 25, -28)
-local tracking = Frame.new("MiniMapTracking", nil)
+-- Deliberately given a parent already. A guard that skipped the fix when the
+-- frame "looked parented" is what made the icon vanish a second time, so the
+-- reparent has to happen regardless of what it is attached to.
+local strayParent = Frame.new("SomeOtherFrame", _G.UIParent)
+local tracking = Frame.new("MiniMapTracking", strayParent)
 tracking:SetSize(33, 33)
-tracking:SetPoint("TOPLEFT", nil, "TOPLEFT", 11, -26)
+tracking:SetPoint("TOPLEFT", strayParent, "TOPLEFT", 11, -26)
 
--- The clock. Blizzard anchors its ticker at a half-pixel y.
+-- The clock, inside a minimap subtree scaled to 110% - which is what makes
+-- its text render soft, and what rounding the anchor alone cannot fix.
+minimap:SetScale(1.1)
 local clockBtn = Frame.new("TimeManagerClockButton", backdrop)
 local clockText = Frame.new("TimeManagerClockTicker", clockBtn)
 clockText:SetPoint("CENTER", clockBtn, "CENTER", 3, 1.5)
@@ -994,32 +1008,34 @@ print("\nminimap fixes")
 do
     -- Blizzard leaves MiniMapTracking parentless, so it strands itself in the
     -- screen corner. It must end up on the minimap backdrop.
-    eq(tracking:GetParent(), backdrop, "tracking button reparented onto the backdrop")
-    local p, _, rp, tx, ty = tracking:GetPoint(1)
-    eq(p, "TOPLEFT", "anchored TOPLEFT")
-    eq(rp, "TOPLEFT", "to the backdrop's TOPLEFT")
+    eq(tracking:GetParent(), backdrop,
+        "reparented onto the backdrop even though it already had a parent")
+    local p, rel, rp, tx, ty = tracking:GetPoint(1)
     -- Blizzard's own position from MinimapTracking_Dropdown.xml, chosen
     -- because the vanilla file's (11,-26) collides with LFG at (25,-28).
-    eq(tx, 5, "at Blizzard's own x")
-    eq(ty, -64, "and y - a full row below the LFG icon")
-    local _, _, _, lx, ly = lfg:GetPoint(1)
-    ok(math.abs(ty - ly) >= 33, "clear of the LFG icon by at least an icon height")
-    ok(lx ~= nil, "LFG icon still where Blizzard put it")
+    eq(rel, lfg, "anchored to the LFG icon itself, so it follows wherever that sits")
+    eq(p, "TOP", "by its top")
+    eq(rp, "BOTTOM", "to LFG's bottom - directly underneath")
+    ok(tx == 0 and ty < 0, "with a small gap, on the ring's edge")
 
-    -- The clock rounding is OFF by default: it did not help, and at a 110%
-    -- minimap scale no integer offset lands on a whole screen pixel anyway.
-    -- Blizzard's anchor is left exactly as shipped.
+    -- The clock sits in a subtree scaled to 110%. Compensating its own scale
+    -- brings the EFFECTIVE scale back to 1, so the digits render at native
+    -- size on the pixel grid - which rounding the anchor alone could not do.
+    ok(math.abs(clockBtn:GetEffectiveScale() - 1) < 0.001,
+        ("clock renders at native scale (effective %.3f)"):format(clockBtn:GetEffectiveScale()))
+    ok(clockBtn:GetScale() < 1, "by scaling the button down against the minimap")
+
+    -- And only now is rounding the half-pixel anchor meaningful.
     local _, _, _, cx, cy = clockText:GetPoint(1)
-    eq(cx, 3, "clock text left at Blizzard's horizontal offset")
-    eq(cy, 1.5, "and its vertical offset untouched by default")
+    eq(cx, 3, "clock text keeps Blizzard's horizontal offset")
+    eq(cy, 2, "and its half-pixel y is rounded, now that it lands on the grid")
 
-    -- It still works when asked for, at 100% where the arithmetic holds.
+    -- Switching it off hands the scale back.
+    ns.Config:Set("fixClockText", false)
+    ns.Minimap:Apply()
+    eq(clockBtn:GetScale(), 1, "scale restored when disabled")
     ns.Config:Set("fixClockText", true)
     ns.Minimap:Apply()
-    local _, _, _, _, cy2 = clockText:GetPoint(1)
-    eq(cy2, 2, "opt-in rounding still snaps it to the grid")
-    ns.Config:Set("fixClockText", false)
-    clockText:SetPoint("CENTER", clockBtn, "CENTER", 3, 1.5)
 end
 
 print("\nchat")

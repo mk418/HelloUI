@@ -112,55 +112,89 @@ local function applyTracking()
     local f = trackingFrame()
     local map = _G["Minimap"]
     if not (f and map and f.SetParent) then return end
-    -- Already parented somewhere sensible by the client or another addon:
-    -- leave it be rather than fighting over it.
-    if f.GetParent and f:GetParent() ~= nil and f:GetParent() ~= _G["UIParent"]
-       and not f.HelloUIReparented then
-        Minimap_.trackingFixed = "already parented"
-        return
-    end
-    if f.HelloUIReparented then return end
 
+    -- No "already parented, leave it alone" guard. There was one, and it is
+    -- why the icon vanished again: MiniMapTracking's parent after a reload is
+    -- whatever the parentless XML leaves it with, the guard read that as
+    -- somebody else's claim, and skipped the fix. Speculative defensiveness
+    -- for a case that was never observed, breaking the case that was.
     local backdrop = _G["MinimapBackdrop"] or map
     f:SetParent(backdrop)
     f:ClearAllPoints()
-    f:SetPoint("TOPLEFT", backdrop, "TOPLEFT", 5, -64)
-    f.HelloUIReparented = true
-    Minimap_.trackingFixed = true
+
+    -- Directly under the LFG eye, on the ring's edge. Anchoring to LFG rather
+    -- than to fixed coordinates means it stays under it wherever that sits -
+    -- and a hidden frame still reports its position, so this works even
+    -- before either icon is shown.
+    local lfg = _G["LFGMinimapFrame"]
+    if lfg and lfg.GetPoint and lfg:GetPoint(1) then
+        f:SetPoint("TOP", lfg, "BOTTOM", 0, -2)
+        Minimap_.trackingFixed = "under the LFG icon"
+    else
+        -- LFG absent: Blizzard's own position from the non-vanilla variant of
+        -- this same file, which is one row below where LFG would be.
+        f:SetPoint("TOPLEFT", backdrop, "TOPLEFT", 5, -64)
+        Minimap_.trackingFixed = "backdrop fallback"
+    end
 end
 
 --------------------------------------------------------------------------
 -- The clock
 --
--- Blizzard anchors the ticker at a HALF PIXEL:
---   <FontString name="TimeManagerClockTicker" inherits="WhiteNormalNumberFont">
---       <Anchor point="CENTER" x="3" y="1.5"/>
--- and a font string rendered off the pixel grid smears rather than landing
--- cleanly, which is what reads as misaligned. The x=3 is deliberate - it
--- centres the digits inside the dial art, which is not symmetric - so only
--- the y is rounded, keeping Blizzard's intent and snapping to the grid.
+-- Two things are wrong with it, and the first attempt only addressed the
+-- smaller one.
 --
--- Blizzard_TimeManager is LoadOnDemand, so the frame may not exist yet; it is
--- re-applied if the addon loads later.
+-- THE SCALE is the real cause. Making the minimap 110% scales the whole
+-- subtree, clock included, so its digits are drawn at a non-integer scale and
+-- render soft. Rounding the anchor cannot help while that is true - at 1.1,
+-- an offset of 2 lands at 2.2 screen pixels. So the button's own scale is
+-- compensated to bring its EFFECTIVE scale back to UIParent's, which renders
+-- the text at native size and on the grid. The clock stays its original size
+-- while the map around it is bigger, which is the point.
+--
+-- THE HALF PIXEL is Blizzard's: the ticker is anchored CENTER at x=3, y=1.5.
+-- Once the effective scale is 1 that rounding is finally meaningful, so it is
+-- done here too - and only the y, because the x=3 centres the digits inside
+-- dial art that is not symmetric.
+--
+-- Blizzard_TimeManager is LoadOnDemand, so the frame may not exist yet; this
+-- re-applies if the addon loads later, and on the events that change scales.
 --------------------------------------------------------------------------
 
 local function applyClock()
-    if not Config:Enabled("fixClockText") then return end
-
-    local ticker = _G["TimeManagerClockTicker"]
     local button = _G["TimeManagerClockButton"]
-    if not (ticker and button and ticker.SetPoint) then return end
+    local ticker = _G["TimeManagerClockTicker"]
+    if not (button and ticker and button.SetScale) then return end
 
-    local point, rel, relPoint, x, y = ticker:GetPoint(1)
-    if not point then return end
-    if y == math.floor(y) then
-        Minimap_.clockFixed = "already whole-pixel"
+    if not Config:Enabled("fixClockText") then
+        if button.HelloUIScaled then
+            button:SetScale(1)
+            button.HelloUIScaled = nil
+        end
         return
     end
 
-    ticker:ClearAllPoints()
-    ticker:SetPoint(point, rel or button, relPoint, x, math.floor(y + 0.5))
-    Minimap_.clockFixed = "rounded"
+    -- Cancel out whatever scale the minimap subtree is under, so the clock
+    -- draws at the same scale as the rest of the UI.
+    local parent = button.GetParent and button:GetParent()
+    local ui = UIParent and UIParent.GetEffectiveScale and UIParent:GetEffectiveScale() or 1
+    if parent and parent.GetEffectiveScale then
+        local own = button:GetEffectiveScale() or 1
+        local cur = button:GetScale() or 1
+        local parentScale = (own > 0 and cur > 0) and (own / cur) or 1
+        if parentScale > 0 then
+            button:SetScale(ui / parentScale)
+            button.HelloUIScaled = true
+        end
+    end
+
+    local point, rel, relPoint, x, y = ticker:GetPoint(1)
+    if point and y and y ~= math.floor(y) then
+        ticker:ClearAllPoints()
+        ticker:SetPoint(point, rel or button, relPoint, x, math.floor(y + 0.5))
+    end
+
+    Minimap_.clockFixed = ("scale %.3f"):format(button:GetScale() or 1)
 end
 
 function Minimap_:Apply()
@@ -191,6 +225,11 @@ function Minimap_:Init()
             ns:SafeCall("Minimap:clock", applyClock)
         end
     end)
+
+    -- The compensating scale depends on the minimap's, which changes with the
+    -- UI scale and the resolution.
+    ns:On("UI_SCALE_CHANGED", function() ns:SafeCall("Minimap:clockscale", applyClock) end)
+    ns:On("DISPLAY_SIZE_CHANGED", function() ns:SafeCall("Minimap:clocksize", applyClock) end)
 
     local f = todFrame()
     if f then
