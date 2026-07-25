@@ -183,6 +183,22 @@ local function geometry()
 
         { system = BAR, index = I.PetActionBar, rows = 1,
           point = "BOTTOM", relativeTo = "UIParent", relativePoint = "BOTTOM", x = 0, y = BASE_Y + ROW_STEP * 3 },
+
+        -- Bars 6, 7 and 8 continue the stack upward. They are switched off in
+        -- the shipped defaults, matching DragonflightUI, but they are
+        -- positioned anyway: Blizzard's preset parks these three in the MIDDLE
+        -- OF THE SCREEN (TOP relative to UIParent CENTER, 0 / -50 / -100), so
+        -- without this, switching one on drops a row of buttons across the
+        -- middle of the view. Same argument as MultiBarLeft - a bar that is
+        -- off should still land correctly the moment it is turned on.
+        { system = BAR, index = I.ExtraBar1, rows = 1,
+          point = "BOTTOM", relativeTo = "UIParent", relativePoint = "BOTTOM", x = 0, y = BASE_Y + ROW_STEP * 4 },
+
+        { system = BAR, index = I.ExtraBar2, rows = 1,
+          point = "BOTTOM", relativeTo = "UIParent", relativePoint = "BOTTOM", x = 0, y = BASE_Y + ROW_STEP * 5 },
+
+        { system = BAR, index = I.ExtraBar3, rows = 1,
+          point = "BOTTOM", relativeTo = "UIParent", relativePoint = "BOTTOM", x = 0, y = BASE_Y + ROW_STEP * 6 },
     }
 
     -- The cast bar. Blizzard's preset parks it dead centre of the screen;

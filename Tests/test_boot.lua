@@ -717,7 +717,7 @@ do
         end
     end
     eq(bars, 11, "every action bar system carried over from the preset")
-    eq(moved, 7, "the seven action bars we position are flagged as moved")
+    eq(moved, 10, "every action bar we position is flagged as moved")
     ok(minimapSystem ~= nil and minimapSystem.isInDefaultPosition == true,
         "systems we do not touch are left exactly as Blizzard had them")
 
@@ -757,6 +757,20 @@ do
         end
     end
     eq(statusBars, 2, "both status tracking slots positioned")
+
+    -- Bars 6-8 ship switched off, but must still be positioned: Blizzard's
+    -- preset parks them in the middle of the screen, so an unpositioned bar
+    -- lands across the player's view the moment it is enabled.
+    for _, idx in ipairs({ 6, 7, 8 }) do
+        local e
+        for _, entry in ipairs(sys) do
+            if entry.system == 1 and entry.systemIndex == idx then e = entry end
+        end
+        ok(e ~= nil and e.anchorInfo.relativeTo == "UIParent",
+            ("bar %d positioned even though it ships off"):format(idx))
+        ok(e ~= nil and e.anchorInfo.relativePoint == "BOTTOM",
+            ("bar %d anchored to the bottom, not screen centre"):format(idx))
+    end
 
     -- Size stays at 100%: it is a SCALE, so using it to narrow the bar
     -- squashed the height too. Width is set directly instead - see the
