@@ -64,6 +64,12 @@ function Frame:SetAllPoints(rel)
 end
 function Frame:SetColorTexture(r, g, b, a) self._color = { r, g, b, a } end
 function Frame:GetJustifyH() return self._justify end
+-- Recorded: the cast bar's spell name is shrunk to stop its ink standing proud
+-- of a 13px bar, so "which font object" is the whole assertion.
+function Frame:SetFontObject(f) self._font = f end
+function Frame:GetFontObject() return self._font end
+function Frame:SetWordWrap(v) self._wrap = v and true or false end
+function Frame:SetMaxLines(n) self._maxLines = n end
 function Frame:SetJustifyH(v) self._justify = v end
 
 Frame.__index = Frame
@@ -643,6 +649,10 @@ pcb.Border = pcb:CreateTexture()
 -- faithful rather than a simplification.
 pcb:SetSize(195, 13)
 pcb.Text = pcb:CreateFontString("PlayerCastingBarFrameText")
+-- Blizzard's declared state: GameFontHighlight in a region 185x16, inside a bar
+-- that is 13 tall. That mismatch IS the overspill bug.
+pcb.Text:SetFontObject("GameFontHighlight")
+pcb.Text:SetSize(185, 16)
 pcb.Text:SetPoint("CENTER", pcb, "CENTER", 0, 0)
 pcb.Flash = pcb:CreateTexture()
 pcb.BorderShield = pcb:CreateTexture()
@@ -1400,6 +1410,13 @@ do
     ok(tp == "LEFT" and tx == 4, "spell name moved to the left")
     eq(pcb.Text:GetJustifyH(), "LEFT", "and justified there")
     ok(pcb.HelloUITimer ~= nil and pcb.HelloUITimer:IsShown(), "countdown created - the client has no CastTimeText")
+
+    -- The spell name has to shrink. Blizzard's GameFontHighlight is sized for a
+    -- bar with border art over the overspill; with the border hidden its ink
+    -- climbs out of the 13px bar.
+    eq(pcb.Text:GetFontObject(), _G.GameFontHighlightSmall or "GameFontHighlightSmall",
+        "spell name shrunk to fit a 13px bar")
+    eq(pcb.Text._wrap, false, "and kept to one line, which is the other way out of the bar")
     local cr = select(1, pcb:GetStatusBarColor())
     eq(cr, 0.85, "and coloured to match HelloWarrior's")
 
@@ -1430,6 +1447,7 @@ do
     local rp, _, _, rx = pcb.Text:GetPoint(1)
     ok(rp == "CENTER" and rx == 0, "and the spell name re-centred")
     eq(select(1, pcb:GetStatusBarColor()), 1, "with Blizzard's own colour recomputed, not remembered")
+    eq(pcb.Text:GetFontObject(), "GameFontHighlight", "and Blizzard's own font handed back")
     ns.Config:Set("castBarStyle", true)
     ns:ApplyAll()
     eq(pcb.Border:IsShown(), false, "and restyled when switched back on")

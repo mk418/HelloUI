@@ -74,6 +74,18 @@ local Config = ns.Config
 
 local GOLD = { 0.85, 0.70, 0.30 }  -- HelloWarrior's, so the two match exactly
 
+-- Blizzard declares the spell name GameFontHighlight in a region sized 185x16,
+-- inside a bar that is 13 tall. Centred in 13px, a 16px box stands about 1.5px
+-- proud at the top and bottom, and with the border art hidden there is nothing
+-- left to cover it - the name visibly climbs out of the bar. Stock never showed
+-- this because the 256x64 border drew over the overspill.
+--
+-- A smaller font is the fix rather than a clamped height: a FontString does not
+-- clip its ink to its rect, so shrinking the box moves the problem rather than
+-- solving it. Word wrap off with it, or a long enough name takes a second line
+-- and climbs out again by a whole line height.
+local SMALL_FONT = "GameFontHighlightSmall"
+
 local saved = {}
 
 local function remember(f)
@@ -93,6 +105,7 @@ local function remember(f)
         textPoint = point, textRel = rel, textRelPoint = relPoint,
         textX = x, textY = y,
         justify = f.Text and f.Text.GetJustifyH and f.Text:GetJustifyH(),
+        font = f.Text and f.Text.GetFontObject and f.Text:GetFontObject(),
     }
 end
 
@@ -144,6 +157,9 @@ local function applyStyle(f)
         f.Text:SetPoint("LEFT", f, "LEFT", 4, 0)
         f.Text:SetPoint("RIGHT", f, "RIGHT", -40, 0)
         if f.Text.SetJustifyH then f.Text:SetJustifyH("LEFT") end
+        if f.Text.SetFontObject then f.Text:SetFontObject(_G[SMALL_FONT] or SMALL_FONT) end
+        if f.Text.SetWordWrap then f.Text:SetWordWrap(false) end
+        if f.Text.SetMaxLines then f.Text:SetMaxLines(1) end
     end
 
     f:SetStatusBarColor(GOLD[1], GOLD[2], GOLD[3])
@@ -164,6 +180,8 @@ local function restoreStyle(f)
         f.Text:ClearAllPoints()
         f.Text:SetPoint(s.textPoint, s.textRel, s.textRelPoint, s.textX, s.textY)
         if f.Text.SetJustifyH and s.justify then f.Text:SetJustifyH(s.justify) end
+        if f.Text.SetFontObject and s.font then f.Text:SetFontObject(s.font) end
+        if f.Text.SetWordWrap then f.Text:SetWordWrap(true) end
     end
 
     -- Blizzard's own colour, recomputed rather than remembered: it depends on the
