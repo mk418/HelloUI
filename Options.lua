@@ -176,15 +176,8 @@ local keybindCheck = SettingCheck("Keybind", "Hide keybind text", barsHeader, "B
 local macroCheck = SettingCheck("Macro", "Hide macro name text", keybindCheck, "BOTTOMLEFT", 0, -4,
     "hideMacroText")
 
-local borderCheck = SettingCheck("Borders", "Solid borders on every button",
-    macroCheck, "BOTTOMLEFT", 0, -4, "buttonBorders",
-    "Blizzard ships the button border at half alpha because it was meant to " ..
-    "sit on the bar backdrop. With the backdrop hidden that reads as no border " ..
-    "at all, so this takes it to full alpha - Blizzard's own texture, just " ..
-    "actually visible.")
-
 local emptyCheck = SettingCheck("EmptySlots", "Show empty action slots",
-    borderCheck, "BOTTOMLEFT", 0, -4, "showEmptyButtons",
+    macroCheck, "BOTTOMLEFT", 0, -4, "showEmptyButtons",
     "On, bars keep their full rectangular shape - which is what makes the " ..
     "side blocks read as 4x3. Off, Blizzard hides empty slots, so a bar you " ..
     "have not filled vanishes instead of showing a grid of empty squares. " ..

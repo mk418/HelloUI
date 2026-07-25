@@ -31,11 +31,6 @@ local accountDefaults = {
     hideKeybindText = true,
     hideMacroText   = true,
 
-    -- With the bar backdrop gone, each button's own border is all that is
-    -- left - and stock ships it at alpha 0.5, which reads as no border at
-    -- all. Full alpha, using Blizzard's own texture. See Buttons.lua.
-    buttonBorders = true,
-
     -- Show empty action slots. On, the bars keep their full shape - which is
     -- what makes the flanking blocks read as 4x3 rather than as a couple of
     -- stray buttons, and matches DragonflightUI's alwaysShow default. Off,
@@ -204,8 +199,9 @@ local RETIRED = {
     -- Became unconditional behaviour.
     "hideBarArt", "alwaysShowBarText", "hideTimeOfDay",
     "classColorPlayerHealth", "yieldCastBar", "castBarStyle",
-    -- Feature removed outright: the friends list is Blizzard's again.
-    "friendsClassColor", "friendsHeart",
+    -- Features removed outright: the friends list and the button borders are
+    -- Blizzard's again.
+    "friendsClassColor", "friendsHeart", "buttonBorders",
 }
 
 local function dropRetired(t)

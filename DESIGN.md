@@ -70,7 +70,7 @@ ships in the client.
 
 ## Current scope
 
-Eleven features. Five are switches; the other six are simply what the addon does
+Ten features. Four are switches; the other six are simply what the addon does
 — hiding the gryphons and bar backdrop, always-visible XP and reputation text,
 hiding the time-of-day dial, class-colouring the player health bar, yielding the
 cast bar to a sibling that draws its own, and the flat cast bar. Those started as
@@ -159,13 +159,14 @@ DragonflightUI's layout was its default.
   reasoned from the 33×33 *frames* — but the visible ring is only ~26.5 units, so
   frame-tangent still left a 15.7-unit hole. Art, not hit rects, is what a gap
   looks like.
-- **Button borders** — Blizzard ships `ActionButtonTemplate`'s `NormalTexture`
-  (`UI-Quickslot2`) at `alpha="0.5"`, because on Classic Era it was only ever
-  meant to sit on top of the bar backdrop, which is what actually draws the
-  per-slot recesses. Hide the bar art and the recesses go with it, leaving icons
-  floating on a half-transparent outline. Full alpha fixes it with Blizzard's own
-  texture — deliberately not DragonflightUI's answer, which replaced the texture
-  outright with its own atlas and means shipping art.
+- **Button borders — tried and removed.** Blizzard ships
+  `ActionButtonTemplate`'s `NormalTexture` (`UI-Quickslot2`) at `alpha="0.5"`,
+  because it was only ever meant to sit on the bar backdrop that draws the
+  per-slot recesses; hide the bar art and the icons float on a half-transparent
+  outline. Taking it to full alpha shipped for a while and was then removed after
+  looking at it, which is the only thing that settles a look. Nothing writes that
+  texture now, in either direction, so the buttons carry exactly Blizzard's own
+  art at Blizzard's own alpha.
 - **Main bar art** — hide the gryphons and the bar backdrop. Appearance rather
   than position, so this is HelloUI's job and not Edit Mode's; the
   delegate-to-Edit-Mode rule is about anchors. It drives the same two frames

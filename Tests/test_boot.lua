@@ -781,8 +781,17 @@ eq(_G.ActionButton1.Name._alpha, 0, "bar1 macro text hidden")
 eq(_G.StanceButton1.HotKey._alpha, 0, "stance keybind text hidden")
 eq(_G.PetActionButton10.Name._alpha, 0, "pet macro text hidden")
 eq(_G.MultiBar7Button12.HotKey._alpha, 0, "bar8 keybind text hidden")
-eq(_G.ActionButton1:GetNormalTexture()._alpha, 1, "button border taken to full alpha")
-eq(_G.StanceButton1:GetNormalTexture()._alpha, 1, "including the stance bar")
+-- The border feature was removed after seeing it on screen, so the guarantee is
+-- now the opposite one: HelloUI must not touch NormalTexture's alpha at all.
+-- Set to something Blizzard never uses first, so "left alone" cannot pass by
+-- the stub simply defaulting to the value being asserted.
+_G.ActionButton1:GetNormalTexture():SetAlpha(0.42)
+_G.StanceButton1:GetNormalTexture():SetAlpha(0.42)
+ns:ApplyAll()
+eq(_G.ActionButton1:GetNormalTexture()._alpha, 0.42, "button border alpha left entirely alone")
+eq(_G.StanceButton1:GetNormalTexture()._alpha, 0.42, "including the stance bar")
+_G.ActionButton1:GetNormalTexture():SetAlpha(0.5)
+_G.StanceButton1:GetNormalTexture():SetAlpha(0.5)
 
 ----------------------------------------------------------------------
 -- Assertions: bars
@@ -1639,7 +1648,6 @@ eq(cvars.xpBarText, "0", "xpBarText restored to its original value when disabled
 eq(healthBar.lockColor, nil, "lockColor handed back to Blizzard when disabled")
 eq(_G.GameTimeFrame:IsShown(), true, "time-of-day dial shown again when disabled")
 eq(_G.PlayerFrameTexture._desat, false, "darkmode restored when disabled")
-eq(_G.ActionButton1:GetNormalTexture()._alpha, 0.5, "button border back to Blizzard's 0.5")
 eq(_G._statusContainer:GetWidth(), 1024, "status bar width restored when disabled")
 eq(_G._statusContainer.StandaloneFrameTexture2:GetWidth(), 240, "and its border art too")
 eq(mainMenuBar:IsShown(), true, "bar art restored when disabled")
@@ -1713,7 +1721,7 @@ do
     local RETIRED = { "hideBarArt", "alwaysShowBarText", "hideTimeOfDay",
                       "classColorPlayerHealth", "yieldCastBar", "castBarStyle",
                       -- feature removed outright, not retired into behaviour
-                      "friendsClassColor", "friendsHeart" }
+                      "friendsClassColor", "friendsHeart", "buttonBorders" }
 
     -- An install that had ticked every one of them, including two set to false.
     for _, key in ipairs(RETIRED) do HelloUIDB[key] = false end
@@ -1749,7 +1757,7 @@ do
     -- No checkbox left behind for any of them.
     local boxes = {}
     for _, suffix in ipairs({ "BarArt", "BarText", "TimeOfDay", "ClassColor", "CastBar", "CastStyle",
-                              "Friends", "Heart" }) do
+                              "Friends", "Heart", "Borders" }) do
         if _G["HelloUIOpt" .. suffix] then boxes[#boxes + 1] = suffix end
     end
     ok(#boxes == 0, ("and no checkbox survives for them%s"):format(
