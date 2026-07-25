@@ -142,10 +142,12 @@ local accountDefaults = {
     -- and far too large.
     minimapSize = 6,
 
-    -- No chat settings. The old profile pinned ChatFrame1 to 460x207 at
-    -- 42,35, but on 1.15.9 ChatFrame1 inherits EditModeChatFrameSystemTemplate
-    -- and Edit Mode owns its anchor AND its width and height. Same reasoning
-    -- as the minimap: that is Edit Mode's job now.
+    -- No chat settings, which is not the same as not placing the chat frame.
+    -- The old profile pinned ChatFrame1 to 460x207 at 42,35; on 1.15.9 it
+    -- inherits EditModeChatFrameSystemTemplate, so its anchor and its size
+    -- belong to Edit Mode - and the layout sets its position there, along with
+    -- the minimap's. Neither needs a switch of its own: applying the layout is
+    -- the decision, and Edit Mode owns them both afterwards.
 
     -- Layout.lua. At login, offer the DragonflightUI bar arrangement as a
     -- real Edit Mode layout - asked, never applied silently, and only when it

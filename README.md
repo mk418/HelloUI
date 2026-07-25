@@ -2,7 +2,8 @@
 
 De-clutters the stock World of Warcraft Classic Era interface. No art overhaul,
 no replacement frames, no reimplemented layout engine — 1.15.9 brought Blizzard
-Edit Mode to Era, so position is Edit Mode's job and this addon stays out of it.
+Edit Mode to Era, so every position it does set is written into an Edit Mode
+layout rather than anchored behind the client's back.
 
 Replaces DragonflightUI, which broke on 1.15.9. Its scope came from reading that
 addon's saved profile across 47 characters: AceDB only writes non-default

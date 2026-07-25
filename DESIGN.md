@@ -80,7 +80,8 @@ addon is enabled, `/hui off` still hands every one of them back, and their keys
 are deleted from saved variables on sight so a stale `false` cannot read as a
 setting that broke. Three changes from the first
 count: pinning the chat frame turned out to belong to Edit Mode, for the same
-reason the minimap tuck did (see *Out of scope*); hiding the main bar art
+reason the minimap tuck did — both are placed by the layout now, which is Edit
+Mode's own data rather than an anchor of ours (see *Out of scope*); hiding the main bar art
 turned out to be real work rather than the no-op it first looked like; and the
 bar *arrangement* turned out to matter as much as the de-clutter, which the
 saved-profile method could never have revealed — AceDB records deviations, and
@@ -300,6 +301,13 @@ DragonflightUI's layout was its default.
   means nothing: a pin would drive the Edit Mode overrides, write manager state
   in our taint context, and be reverted on the next layout save. The old
   profile's 460x207 at 42,35 is reproducible in Edit Mode by dragging.
+
+  What *is* in scope, and worth stating plainly because the two look alike: the
+  bar layout writes a position for the chat frame into the layout itself
+  (`Enum.EditModeSystem.ChatFrame`, lifted clear of the bottom-left flank block).
+  That is Edit Mode's own data written through `C_EditMode.SaveLayouts`, not an
+  anchor set behind its back — the distinction this whole section turns on. No
+  separate setting, because applying the layout is the decision.
 - **Minimap position.** Stock 1.15.9 already anchors the minimap TOPRIGHT at
   offset 0,0 — both Edit Mode preset layouts say so and the XML agrees — so
   there is nothing to tuck. DragonflightUI's `+7` was compensating for dead
@@ -308,7 +316,12 @@ DragonflightUI's layout was its default.
   replaced by an override that writes manager state in the caller's taint
   context, the frame is `clampedToScreen` so a positive offset on a TOPRIGHT
   anchor cannot move it anyway, and any anchor set is reverted on layout save,
-  spec change and every close of Edit Mode. Drag it in Edit Mode.
+  spec change and every close of Edit Mode.
+
+  Same caveat as the chat frame: the layout does carry a minimap entry, both an
+  anchor and its `Size` setting (110%), for the same reason and by the same
+  sanctioned route. "Out of scope" here means HelloUI never calls `SetPoint` on
+  `MinimapCluster`, not that the arrangement ignores the minimap.
 - **Profiles, import/export, layout presets.** One account-wide layout plus one
   character override is the whole requirement.
 

@@ -148,7 +148,7 @@ subtitle:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -8)
 subtitle:SetWidth(560)
 subtitle:SetJustifyH("LEFT")
 subtitle:SetText("De-clutters the stock interface. No art overhaul, no replacement frames - " ..
-    "position is Blizzard Edit Mode's job.")
+    "anything it positions goes through a Blizzard Edit Mode layout.")
 
 -- What the addon does without being asked. Listed rather than left implicit:
 -- these were checkboxes until they were not, and a panel that simply stopped
@@ -220,14 +220,6 @@ SubCheck("BarOffpet", "Pet", stanceCheck, "TOPLEFT",
 -- and the class-coloured health bar are unconditional now, and neither section
 -- had anything else in it.
 
-local chatNote = content:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
-chatNote:SetPoint("TOPLEFT", stanceCheck, "BOTTOMLEFT", 2, -14)
-chatNote:SetWidth(260)
-chatNote:SetJustifyH("LEFT")
-chatNote:SetSpacing(2)
-chatNote:SetText("Chat frame size and position are Edit Mode settings on " ..
-    "Classic Era - drag and resize it there.")
-
 -- Right column ---------------------------------------------------------
 
 local RIGHT = 300
@@ -257,22 +249,28 @@ for i, def in ipairs(AREAS) do
         (i == 1) and 0 or 0, -4, "darkmodeAreas", id)
 end
 
-local minimapHeader = Header("Minimap", areaChecks[#areaChecks], "BOTTOMLEFT", 2, -14)
-
-local minimapNote = content:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
-minimapNote:SetPoint("TOPLEFT", minimapHeader, "BOTTOMLEFT", 2, -8)
-minimapNote:SetWidth(260)
-minimapNote:SetJustifyH("LEFT")
-minimapNote:SetSpacing(2)
-minimapNote:SetText("Position is Edit Mode's job. Stock is already flush " ..
-    "top-right, and the minimap is an Edit Mode system - drag it there.")
-
 --------------------------------------------------------------------------
 -- Buttons and live state
 --------------------------------------------------------------------------
 
+local layoutHeader = Header("Bar layout", stanceCheck, "BOTTOMLEFT", 2, -14)
+
+-- What the layout actually covers. There used to be notes here and under the
+-- minimap saying position was Edit Mode's job and to go drag it - written before
+-- the layout existed, and wrong ever since: HelloUI writes the chat frame's
+-- position and the minimap's size into the layout itself.
+local layoutNote = content:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
+layoutNote:SetPoint("TOPLEFT", layoutHeader, "BOTTOMLEFT", 2, -8)
+layoutNote:SetWidth(260)
+layoutNote:SetJustifyH("LEFT")
+layoutNote:SetSpacing(2)
+layoutNote:SetText("An Edit Mode layout named HelloUI: the bars, the XP and " ..
+    "reputation bars, the cast bar, the chat frame, the minimap and its size, " ..
+    "the micro menu and the bags. Drag any of it in Edit Mode afterwards - your " ..
+    "changes are saved into the layout, and re-applying is the reset.")
+
 local askCheck = SettingCheck("AskLayout", "Offer the HelloUI layout at login",
-    chatNote, "BOTTOMLEFT", -6, -14, "askLayout",
+    layoutNote, "BOTTOMLEFT", -6, -12, "askLayout",
     "Asks once per session, and only when the HelloUI layout is not already " ..
     "the active one - so saying yes retires the question for good.")
 
@@ -321,10 +319,12 @@ layoutBtn:SetScript("OnEnter", function(self)
     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
     GameTooltip:AddLine("Apply / reset the bar layout", 1, 1, 1)
     GameTooltip:AddLine("Creates HelloUI's Edit Mode layout and switches to it: " ..
-        "bars stacked and centred, 80% icons, 2px padding. Run it again to reset " ..
-        "the layout back to that after you have dragged things around - Edit Mode " ..
-        "saves your changes into the layout, so re-applying is the reset. Your " ..
-        "own layouts are never touched.", nil, nil, nil, true)
+        "bars stacked and centred, 80% icons, 2px padding, and with them the cast " ..
+        "bar, the chat frame, the minimap and its size, the micro menu and the " ..
+        "bags - everything that would otherwise collide with the arrangement. Run " ..
+        "it again to reset the layout back to that after you have dragged things " ..
+        "around - Edit Mode saves your changes into the layout, so re-applying is " ..
+        "the reset. Your own layouts are never touched.", nil, nil, nil, true)
     GameTooltip:Show()
 end)
 layoutBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)

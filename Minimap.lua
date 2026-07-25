@@ -613,7 +613,7 @@ function Minimap_:Status()
     ns:Print("minimap: time-of-day dial %s |cff808080(toggle hook=%s, show hook=%s)|r",
         Config:Enabled() and "hidden" or "shown",
         tostring(Minimap_.hookedToggle or false), tostring(Minimap_.hookedShow or false))
-    ns:Print("  |cff808080position is Edit Mode's job; size is set in the layout|r")
+    ns:Print("  |cff808080position and size both come from the layout - /hui layout|r")
     local track = trackingFrame()
     ns:Print("  |cff808080tracking button: %s, shown=%s, ring %s|r",
         (not track) and "absent" or (Minimap_.trackingFixed or "left alone"),
