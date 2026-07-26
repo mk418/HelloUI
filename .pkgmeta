@@ -18,8 +18,10 @@ ignore:
     - Tests
     # Project image for the CurseForge page, 2.3MB of it. Tracked in git so the
     # page and the repo stay in step, but there is no reason to make every
-    # player download it. Nothing in the TOC points at it - HelloUI ships no
-    # IconTexture, unlike HelloWarrior, which is why its Icon.png does ship.
+    # player download it.
+    #
+    # Icon.png is deliberately NOT listed here: it is cropped from this same
+    # image and the TOC's IconTexture points at it, so it has to ship.
     - HelloUI.png
 
 # Generate a -nolib variant of the zip in case libs ever get embedded.

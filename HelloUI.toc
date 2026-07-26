@@ -5,6 +5,7 @@
 ## Version: 0.1.0
 ## Category: UI Overhaul
 ## X-Curse-Project-ID: 1625608
+## IconTexture: Interface\AddOns\HelloUI\Icon.png
 ## SavedVariables: HelloUIDB
 ## SavedVariablesPerCharacter: HelloUICharDB
 ## X-License: MIT
