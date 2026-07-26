@@ -121,7 +121,10 @@ thing.
 
 The **bar layout follows the profile**, so this is one decision rather than two:
 `Default` uses the Edit Mode layout named `HelloUI`, and a profile called
-`Raiding` uses `HelloUI - Raiding`. Blizzard caps layouts at five per type, which
+`Raiding` uses `HelloUI - Raiding`. Switching profile switches layout with it,
+and a brand new profile gets its layout built there and then — but only if you
+were already using HelloUI's layout, and switching to a profile that already has
+one never rebuilds it, so anything you dragged stays put. Blizzard caps layouts at five per type, which
 in practice caps how many profiles can each have their own arrangement.
 
 The case this exists for: a warrior running HelloWarrior wants Blizzard's bar 1

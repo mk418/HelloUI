@@ -262,7 +262,14 @@ DragonflightUI's layout was its default.
   once the main bar art they sat on is hidden.
 
   Named after the profile: `Default` keeps the bare `HelloUI`, anything else
-  gets `HelloUI - <profile>`. Always an `Account` layout, because a profile is
+  gets `HelloUI - <profile>`. Changing profile changes layout with it —
+  `Layout:FollowProfile`, called from `Config`'s profile writes. It **activates**
+  an existing layout rather than re-applying it, because Edit Mode saves dragging
+  into the layout and a rebuild would throw those adjustments away; only a
+  profile with no layout yet gets one built. Gated on whether our layout was
+  active *before* the switch, read before the profile changes, so "asked, never
+  applied silently" survives: consent carries across a switch, it is not assumed
+  by one. Always an `Account` layout, because a profile is
   shareable and a character is not — two characters on `Raiding` share its
   arrangement. A `Character`-typed layout left over from the old per-character
   mode is still found by name and refreshed in place, so the migration does not

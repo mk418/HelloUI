@@ -1737,6 +1737,65 @@ do
     ns.Config:Init()
     eq(ns.Config:ProfileName(), "Default", "a deleted profile is not recreated at login")
 
+    -- THE REPORTED BUG. A new profile changes the layout's NAME, so with no
+    -- layout of that name the addon saw its own layout as inactive and asked for
+    -- it again at every login - a layout the player had already accepted on the
+    -- profile they copied from.
+    ok(ns.Layout:IsActive(), "the layout is active before branching a profile")
+    ns.Config:CopyProfile("Branch")
+    eq(_G._activeLayoutName(), "HelloUI - Branch", "a new profile gets its layout built and activated")
+    ok(ns.Layout:IsActive(), "so the addon sees its layout as active")
+    _G._shownPopup = nil
+    ns.Layout.askedThisSession = false
+    ns.Layout.MaybeAsk(ns.Layout)
+    eq(_G._shownPopup, nil, "and the next login does not ask for it again")
+    ns.Layout.askedThisSession = true
+
+    -- Switching to a profile whose layout EXISTS must not rebuild it: Edit Mode
+    -- saves dragging into the layout, so a rebuild would throw away every
+    -- adjustment made since. Marked here by a system the shipped layout never
+    -- writes, which survives a switch away and back only if nothing rewrote it.
+    do
+        local branch
+        for _, l in ipairs(_G._savedLayouts()) do
+            if l.layoutName == "HelloUI - Branch" then branch = l end
+        end
+        branch.systems[#branch.systems + 1] = { system = 99, dragged = true }
+        ns.Config:UseProfile("Default")
+        eq(_G._activeLayoutName(), "HelloUI", "switching profile switches Edit Mode layout")
+        ns.Config:UseProfile("Branch")
+        eq(_G._activeLayoutName(), "HelloUI - Branch", "and back again")
+
+        -- Re-read from the client rather than checking the table captured above:
+        -- GetLayouts hands back copies, so the captured one keeps the marker even
+        -- when the live layout has been rebuilt - which is exactly how the
+        -- rebuild-instead-of-activate mutation slipped through the first time.
+        local live
+        for _, l in ipairs(_G._savedLayouts()) do
+            if l.layoutName == "HelloUI - Branch" then live = l end
+        end
+        local kept = false
+        for _, e in ipairs((live and live.systems) or {}) do
+            if e.system == 99 then kept = true end
+        end
+        ok(kept, "and the layout it switched to was not rebuilt underneath the player")
+    end
+    ns.Config:UseProfile("Default")
+    ns.Config:DeleteProfile("Branch")
+
+    -- A player who is NOT on our layout is left alone: a profile switch is not
+    -- consent to an arrangement they never accepted.
+    do
+        local restore = _G._setActiveLayoutIndex(1)
+        local before = #_G._savedLayouts()
+        ns.Config:CopyProfile("Quiet")
+        eq(#_G._savedLayouts(), before, "no layout is built for someone not using ours")
+        eq(_G._activeLayoutName(), "Modern", "and Edit Mode is left on whatever they had")
+        ns.Config:UseProfile("Default")
+        ns.Config:DeleteProfile("Quiet")
+        _G._setActiveLayoutIndex(restore)
+    end
+
     -- The panel's dropdown lists them and switching through it works.
     local entries = _G._openDropdown(_G["HelloUIOptProfile"])
     eq(#entries, 1, "the dropdown lists every profile")

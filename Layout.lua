@@ -434,6 +434,17 @@ end
 -- Applying
 --------------------------------------------------------------------------
 
+-- Saving stores a layout; it does not make Edit Mode re-read and apply it.
+-- Opening and immediately closing the manager is what does, and is the same
+-- nudge LibEditModeOverride uses.
+local function kickEditMode()
+    local mgr = _G["EditModeManagerFrame"]
+    if ShowUIPanel and HideUIPanel and mgr then
+        pcall(ShowUIPanel, mgr)
+        pcall(HideUIPanel, mgr)
+    end
+end
+
 local function layoutIndexByName(info, name)
     for i, l in ipairs(info.layouts or {}) do
         if l.layoutName == name then return i end
@@ -568,13 +579,7 @@ function Layout:Apply(silent)
         pcall(C_EditMode.SetActiveLayout, index)
     end
 
-    -- Saving stores the layout; it does not make Edit Mode re-read and apply
-    -- it. Opening and immediately closing the manager is what does, and is
-    -- the same nudge LibEditModeOverride uses.
-    if ShowUIPanel and HideUIPanel and mgrFrame then
-        pcall(ShowUIPanel, mgrFrame)
-        pcall(HideUIPanel, mgrFrame)
-    end
+    kickEditMode()
 
     Layout.applied = true
     ns:Print("layout: %s the |cffffd100%s|r Edit Mode layout%s and switched to it",
@@ -621,16 +626,71 @@ end
 -- cannot dismiss permanently is worse than no prompt.
 --------------------------------------------------------------------------
 
-function Layout:IsActive()
+function Layout:IsActive(name)
     if not (C_EditMode and C_EditMode.GetLayouts) then return false end
     local ok, info = pcall(C_EditMode.GetLayouts)
     if not ok or type(info) ~= "table" then return false end
+    name = name or layoutName()
 
     -- Against the COMBINED list, not the saved-only one GetLayouts hands back.
     -- activeLayout counts the presets first, so comparing it to an index into
     -- the saved list asks "is our layout active" and reliably answers no.
-    local index = layoutIndexByName({ layouts = combinedLayouts(info) }, layoutName())
+    local index = layoutIndexByName({ layouts = combinedLayouts(info) }, name)
     return index ~= nil and info.activeLayout == index
+end
+
+--------------------------------------------------------------------------
+-- Switching to a layout that already exists
+--
+-- Deliberately NOT Apply. Apply rebuilds the systems table from the current
+-- settings and writes it in, which is exactly right when you ask for the layout
+-- and exactly wrong when you merely switch to a profile that already has one:
+-- Edit Mode saves your dragging into the layout, so rebuilding it would throw
+-- away every adjustment made since. This only changes which layout is active.
+--------------------------------------------------------------------------
+
+function Layout:Activate()
+    if not (C_EditMode and C_EditMode.GetLayouts and C_EditMode.SetActiveLayout) then return false end
+
+    local ok, info = pcall(C_EditMode.GetLayouts)
+    if not ok or type(info) ~= "table" then return false end
+
+    local index = layoutIndexByName({ layouts = combinedLayouts(info) }, layoutName())
+    if not index then return false end
+    if info.activeLayout == index then return true end
+
+    if not pcall(C_EditMode.SetActiveLayout, index) then return false end
+    kickEditMode()
+    return true
+end
+
+--------------------------------------------------------------------------
+-- Following the profile
+--
+-- The layout belongs to the profile, so changing profile has to change layout -
+-- otherwise a new profile leaves Edit Mode on the old profile's layout, HelloUI
+-- sees its own layout as not active, and the login prompt comes back every
+-- session asking for a layout the player already accepted.
+--
+-- Gated on `wasActive`, which the caller reads BEFORE the switch: if the player
+-- was not using our layout on the profile they came from, they have not asked
+-- for our arrangement and a profile switch is not the moment to hand them one.
+-- That keeps "asked, never applied silently" true - the consent carries across
+-- the switch rather than being assumed.
+--------------------------------------------------------------------------
+
+function Layout:FollowProfile(wasActive)
+    if not wasActive then return false end
+    if Layout:IsActive() then return true end
+
+    -- Existing layout: switch to it, untouched. Missing: build it.
+    if Layout:Activate() then return true end
+
+    if InCombatLockdown and InCombatLockdown() then
+        ns:WhenSafe("Layout:follow", function() Layout:Apply(true) end)
+        return false
+    end
+    return Layout:Apply(true)
 end
 
 StaticPopupDialogs = StaticPopupDialogs or {}

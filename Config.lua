@@ -375,12 +375,30 @@ end
 -- another is still pointing at the name. Resolving that at load rather than
 -- silently recreating an empty one is what stops a deleted profile coming back
 -- from the dead full of defaults.
+-- The Edit Mode layout follows the profile, and `wasActive` is read BEFORE the
+-- switch on purpose: it answers "was the player using our layout a moment ago",
+-- which is the consent that carries across. Asking afterwards would be asking
+-- about the layout we just switched to.
+local function followLayout(wasActive)
+    if ns.Layout and ns.Layout.FollowProfile then
+        ns:SafeCall("Layout:follow", ns.Layout.FollowProfile, ns.Layout, wasActive)
+    end
+end
+
+local function layoutWasActive()
+    if not (ns.Layout and ns.Layout.IsActive) then return false end
+    local ok, active = pcall(ns.Layout.IsActive, ns.Layout)
+    return ok and active or false
+end
+
 function Config:UseProfile(name)
     if type(name) ~= "string" or name:match("^%s*$") then return false, "a profile needs a name" end
     name = name:match("^%s*(.-)%s*$")
     HelloUICharDB = HelloUICharDB or {}
+    local wasActive = layoutWasActive()
     profileTable(name)
     HelloUICharDB.profile = name
+    followLayout(wasActive)
     return true, name
 end
 
@@ -391,16 +409,25 @@ function Config:CopyProfile(name)
     if type(name) ~= "string" or name:match("^%s*$") then return false, "a profile needs a name" end
     name = name:match("^%s*(.-)%s*$")
     if Config:ProfileExists(name) then return false, ("there is already a profile called %s"):format(name) end
+    local wasActive = layoutWasActive()
     profiles()[name] = copy(Config:Profile())
     HelloUICharDB.profile = name
+    -- A brand new profile has no layout yet, so this is the case that builds
+    -- one. Without it the next login asks for a layout the player already said
+    -- yes to on the profile they copied from.
+    followLayout(wasActive)
     return true, name
 end
 
 function Config:DeleteProfile(name)
     if name == DEFAULT_PROFILE then return false, "the Default profile cannot be deleted" end
     if not Config:ProfileExists(name) then return false, ("no profile called %s"):format(name) end
+    local wasActive = layoutWasActive()
     profiles()[name] = nil
-    if Config:ProfileName() == name then HelloUICharDB.profile = DEFAULT_PROFILE end
+    if Config:ProfileName() == name then
+        HelloUICharDB.profile = DEFAULT_PROFILE
+        followLayout(wasActive)
+    end
     return true, name
 end
 
