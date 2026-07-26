@@ -4,6 +4,7 @@
 ## Author: Drikk
 ## Version: 0.1.0
 ## Category: UI Overhaul
+## X-Curse-Project-ID: 1625608
 ## SavedVariables: HelloUIDB
 ## SavedVariablesPerCharacter: HelloUICharDB
 ## X-License: MIT
