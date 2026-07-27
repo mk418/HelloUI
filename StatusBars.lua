@@ -5,244 +5,280 @@ local StatusBars = ns.StatusBars
 
 local Config = ns.Config
 
---------------------------------------------------------------------------
--- XP and reputation bar text
---
--- This one collapses almost entirely into a Blizzard setting, which is the
--- best possible outcome and worth spelling out.
---
--- Blizzard's own rule, from StatusTrackingBarMixin:
---
---   function StatusTrackingBarMixin:ShouldBarTextBeDisplayed()
---       return GetCVarBool("xpBarText") or self.textLocked
---              or StatusTrackingBarManager:IsTextLocked();
---   end
---
--- So `xpBarText` is the native "always show the numbers" switch, and setting
--- it is exactly what ticking Blizzard's own checkbox does. No draw-layer
--- surgery, no re-anchoring, nothing to re-assert - the CVar is read live and
--- CVAR_UPDATE makes the manager refresh the bars for us.
---
--- The two other terms in that expression are both mouseover machinery and
--- neither is usable here: StatusTrackingBarContainerMixin:ShowText/HideText
--- set the per-bar `textLocked` on enter and clear it on leave, so a lock we
--- set would be wiped the first time the cursor crossed the bar.
---
--- Which is also why this is ONE setting and not two. The old profile had
--- independent alwaysShowXP and alwaysShowRep flags because DragonflightUI
--- built two separate bars of its own. On stock 1.15.9 both bars share
--- ShouldBarTextBeDisplayed, so there is a single switch covering both, and
--- pretending otherwise in the options panel would be a lie.
---------------------------------------------------------------------------
+-- These are addon-owned frames. Blizzard's tracking manager remains in place
+-- for its secure bookkeeping, but is only made transparent while HelloUI is
+-- enabled. In particular, never resize its containers, hook UpdateBarVisuals,
+-- or call one of its update methods: UI panel positioning reaches that manager
+-- before the Game Menu invokes its protected Logout/Exit callback.
+local WIDTH = 454
+local HEIGHT = 10
+local GAP = 1
+local BOTTOM = 3
 
-local CVAR = "xpBarText"
+local bars = {}
+local stockAlpha
 
--- The player's own value, remembered in saved variables rather than a
--- file-local. A cvar survives /reload but a file-local does not, so a local
--- would be re-captured from the value HelloUI itself had just written - and
--- then "disable the feature" would restore "1" forever, having quietly eaten
--- the player's real setting on the first reload.
-local function rememberOriginal(value)
-    HelloUIDB = HelloUIDB or {}
-    if HelloUIDB.xpBarTextOriginal == nil then
-        HelloUIDB.xpBarTextOriginal = value
+local function formatNumber(value)
+    value = math.floor((tonumber(value) or 0) + 0.5)
+    if BreakUpLargeNumbers then
+        local ok, text = pcall(BreakUpLargeNumbers, value)
+        if ok and text then return text end
+    end
+    return tostring(value)
+end
+
+local function setStockVisible(visible)
+    local manager = _G["StatusTrackingBarManager"]
+    if not (manager and manager.SetAlpha and manager.GetAlpha) then return end
+
+    if stockAlpha == nil then stockAlpha = manager:GetAlpha() end
+    manager:SetAlpha(visible and stockAlpha or 0)
+end
+
+local function showTooltip(bar)
+    local data = bar.data
+    if not data then return end
+
+    GameTooltip:SetOwner(bar, "ANCHOR_TOP")
+    GameTooltip:AddLine(data.label, 1, 1, 1)
+    GameTooltip:AddLine(("%s / %s (%.1f%%)"):format(
+        formatNumber(data.value), formatNumber(data.max), data.percent))
+    if data.rested and data.rested > 0 then
+        GameTooltip:AddLine(("Rested: %s"):format(formatNumber(data.rested)), 0.3, 0.6, 1)
+    end
+    GameTooltip:Show()
+end
+
+local function createBar(name)
+    local frame = CreateFrame("Frame", name, UIParent)
+    frame:SetSize(WIDTH, HEIGHT)
+    frame:SetFrameStrata("MEDIUM")
+    frame:EnableMouse(true)
+
+    local background = frame:CreateTexture(nil, "BACKGROUND")
+    background:SetAllPoints()
+    background:SetColorTexture(0.03, 0.03, 0.03, 0.9)
+
+    -- Rested XP is drawn first and extends beyond the current-XP fill. The
+    -- normal fill, created second, covers the portion already earned.
+    local rested = CreateFrame("StatusBar", nil, frame)
+    rested:SetPoint("TOPLEFT", frame, "TOPLEFT", 1, -1)
+    rested:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -1, 1)
+    rested:SetStatusBarTexture("Interface\\TARGETINGFRAME\\UI-StatusBar")
+    rested:SetStatusBarColor(0.10, 0.32, 0.72, 1)
+
+    local fill = CreateFrame("StatusBar", nil, frame)
+    fill:SetPoint("TOPLEFT", frame, "TOPLEFT", 1, -1)
+    fill:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -1, 1)
+    fill:SetStatusBarTexture("Interface\\TARGETINGFRAME\\UI-StatusBar")
+
+    -- Put the label on the top status-bar frame, not its parent: child-frame
+    -- level ordering otherwise allows the fill to cover a parent FontString
+    -- even when that FontString uses the OVERLAY draw layer.
+    local text = fill:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    text:SetPoint("CENTER", frame, "CENTER", 0, 0)
+    text:SetWidth(WIDTH - 8)
+    text:SetWordWrap(false)
+    text:SetMaxLines(1)
+
+    frame.rested = rested
+    frame.fill = fill
+    frame.text = text
+    frame:SetScript("OnEnter", showTooltip)
+    frame:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    frame:Hide()
+    return frame
+end
+
+local function ensureBars()
+    if bars.xp then return end
+    bars.xp = createBar("HelloUIXPBar")
+    bars.rep = createBar("HelloUIRepBar")
+end
+
+local function setBar(bar, label, value, maximum, color, rested)
+    maximum = tonumber(maximum) or 0
+    if maximum <= 0 then
+        bar.data = nil
+        bar:Hide()
+        return false
+    end
+
+    value = math.max(0, math.min(tonumber(value) or 0, maximum))
+    rested = math.max(0, tonumber(rested) or 0)
+    local percent = value / maximum * 100
+
+    bar.rested:SetMinMaxValues(0, maximum)
+    bar.rested:SetValue(rested > 0 and math.min(maximum, value + rested) or 0)
+    bar.fill:SetMinMaxValues(0, maximum)
+    bar.fill:SetValue(value)
+    bar.fill:SetStatusBarColor(color.r, color.g, color.b, 1)
+    bar.text:SetText(("%s  %s / %s  %.1f%%"):format(
+        label, formatNumber(value), formatNumber(maximum), percent))
+    bar.data = {
+        label = label,
+        value = value,
+        max = maximum,
+        percent = percent,
+        rested = rested,
+    }
+    bar:Show()
+    return true
+end
+
+local function playerIsMaxLevel()
+    if not UnitLevel then return false end
+
+    local level = UnitLevel("player")
+    if not level then return false end
+
+    local getCap = GetMaxPlayerLevel or GetMaxLevelForPlayerExpansion
+        or (C_PlayerInfo and C_PlayerInfo.GetMaxLevelForPlayerExpansion)
+    if not getCap then return false end
+
+    local ok, cap = pcall(getCap)
+    return ok and type(cap) == "number" and cap > 0 and level >= cap
+end
+
+local function updateXP()
+    if not (UnitXP and UnitXPMax) then
+        bars.xp:Hide()
+        return false
+    end
+
+    -- UnitXPMax is not consistently zero at cap across Classic clients. Use
+    -- the explicit player cap first, with the zero-maximum check below as the
+    -- compatibility fallback when no cap API exists.
+    if playerIsMaxLevel() then
+        bars.xp:Hide()
+        bars.xp.data = nil
+        return false
+    end
+
+    local maximum = UnitXPMax("player") or 0
+    local current = UnitXP("player") or 0
+    local rested = GetXPExhaustion and GetXPExhaustion() or 0
+    return setBar(bars.xp, "XP", current, maximum,
+        { r = 0.58, g = 0.18, b = 0.72 }, rested)
+end
+
+local function watchedFaction()
+    if C_Reputation and C_Reputation.GetWatchedFactionData then
+        local ok, first, standing, minimum, maximum, value =
+            pcall(C_Reputation.GetWatchedFactionData)
+        if ok and type(first) == "table" then
+            local data = first
+            return data.name, data.reaction or data.standingID,
+                data.currentReactionThreshold or data.barMin,
+                data.nextReactionThreshold or data.barMax,
+                data.currentStanding or data.barValue
+        elseif ok and first then
+            return first, standing, minimum, maximum, value
+        end
+    end
+
+    if GetWatchedFactionInfo then
+        local ok, name, standing, minimum, maximum, value = pcall(GetWatchedFactionInfo)
+        if ok then return name, standing, minimum, maximum, value end
     end
 end
 
-local function takeOriginal()
-    local v = HelloUIDB and HelloUIDB.xpBarTextOriginal
-    if HelloUIDB then HelloUIDB.xpBarTextOriginal = nil end
-    return v
+local function reputationColor(standing)
+    local color = FACTION_BAR_COLORS and FACTION_BAR_COLORS[standing or 0]
+    if color then return color end
+    return { r = 0.10, g = 0.65, b = 0.20 }
 end
 
-local function getCVar()
-    if C_CVar and C_CVar.GetCVar then return C_CVar.GetCVar(CVAR) end
-    return GetCVar and GetCVar(CVAR)
+local function updateReputation()
+    local name, standing, minimum, maximum, value = watchedFaction()
+    if not (name and minimum and maximum and value) then
+        bars.rep:Hide()
+        bars.rep.data = nil
+        return false
+    end
+
+    return setBar(bars.rep, name, value - minimum, maximum - minimum,
+        reputationColor(standing), 0)
 end
 
-local function setCVar(value)
+local function positionVisibleBars(xpVisible, repVisible)
+    local index = 0
+    for _, entry in ipairs({
+        { bar = bars.xp, visible = xpVisible },
+        { bar = bars.rep, visible = repVisible },
+    }) do
+        if entry.visible then
+            entry.bar:ClearAllPoints()
+            entry.bar:SetPoint("BOTTOM", UIParent, "BOTTOM", 0,
+                BOTTOM + index * (HEIGHT + GAP))
+            index = index + 1
+        end
+    end
+end
+
+function StatusBars:Refresh()
+    ensureBars()
+    if not Config:Enabled() then
+        bars.xp:Hide()
+        bars.rep:Hide()
+        return
+    end
+
+    setStockVisible(false)
+    positionVisibleBars(updateXP(), updateReputation())
+end
+
+-- Older builds of HelloUI forced xpBarText on for Blizzard's bars. Restore the
+-- player's saved value once now that the custom bars own their own text.
+local function restoreLegacyCVar()
+    local original = HelloUIDB and HelloUIDB.xpBarTextOriginal
+    if original == nil then return end
+
+    local getter = (C_CVar and C_CVar.GetCVar) or GetCVar
     local setter = (C_CVar and C_CVar.SetCVar) or SetCVar
-    if not setter then return false end
-    return pcall(setter, CVAR, value)
+    if getter and setter and getter("xpBarText") ~= original then
+        pcall(setter, "xpBarText", original)
+    end
+    HelloUIDB.xpBarTextOriginal = nil
 end
 
 function StatusBars:Apply()
-    local want = Config:Enabled()
+    ensureBars()
+    restoreLegacyCVar()
 
-    local current = getCVar()
-    if current == nil then return end
-
-    local target
-    if want then
-        rememberOriginal(current)
-        target = "1"
+    if Config:Enabled() then
+        self:Refresh()
     else
-        -- Nothing remembered means we never changed it, so there is nothing to
-        -- put back and the player's current value stands.
-        target = takeOriginal() or current
+        bars.xp:Hide()
+        bars.rep:Hide()
+        setStockVisible(true)
     end
-
-    if current == target then return end
-
-    setCVar(target)
-
-    -- Blizzard refreshes on CVAR_UPDATE, but nudging the manager directly
-    -- means the change lands immediately rather than on the next event.
-    local mgr = _G["StatusTrackingBarManager"]
-    if mgr and mgr.UpdateBarTextVisibility then
-        pcall(mgr.UpdateBarTextVisibility, mgr)
-    end
-end
-
-
---------------------------------------------------------------------------
--- Width
---
--- Edit Mode has no width control for these bars. Its "Size" setting is a
--- scale - SetScale(value / 100) - so narrowing the bar with it squashes the
--- height too, and it floors at 50%, which on a 1024px container is still
--- wider than the 454px action bar stack. Both were wrong in different
--- directions, which is why the width is set directly here.
---
--- Three frames per container, because they do not follow each other:
--- StatusTrackingBarTemplate's inner StatusBar carries an explicit
--- <Size x="1024"> and is anchored only at RIGHT, so it does not track its
--- parent's width, and StatusTrackingBarContainerMixin:InitializeBars stamps
--- that size in again at creation from the container's width.
---
--- Re-asserted after UpdateBarVisuals, which Blizzard calls on anchor changes
--- and from UIParent_ManageFramePositions. The hook goes on the manager
--- INSTANCE, not StatusTrackingManagerMixin - Mixin() copies functions onto
--- the frame at creation, so hooking the mixin table reaches nothing.
---------------------------------------------------------------------------
-
--- The container's border art is a fixed chain of textures anchored
--- left-to-right from its left edge, and they do not follow the frame: the
--- standalone set is 16 + 240 + 256 + 256 + 256 = 1024, the main-menu set is
--- 4 x 256. Resizing the container alone therefore leaves the graphics running
--- the full original width - Edit Mode's selection box looks correct while the
--- bar on screen is still 1024 wide, which is exactly the symptom.
---
--- Named explicitly rather than walked, because the parentArray they live in
--- also contains the little 9x9 end caps, which are anchored to the first
--- segment and must keep their natural size.
-local SEGMENT_CHAINS = {
-    { "StandaloneFrameTexture1", "StandaloneFrameTexture2", "StandaloneFrameTexture3",
-      "StandaloneFrameTexture4", "StandaloneFrameTexture5" },
-    { "MainMenuBarFrameTexture1", "MainMenuBarFrameTexture2",
-      "MainMenuBarFrameTexture3", "MainMenuBarFrameTexture4" },
-}
-
-local savedWidth = {}
-
-local function containers()
-    local mgr = _G["StatusTrackingBarManager"]
-    return mgr and mgr.barContainers
-end
-
-local function setWidth(frame, width)
-    if not (frame and frame.SetWidth and frame.GetWidth) then return end
-    if savedWidth[frame] == nil then savedWidth[frame] = frame:GetWidth() end
-    frame:SetWidth(width or savedWidth[frame])
-end
-
--- Derived from the real main action bar rather than a stored constant, and
--- scale-aware. StatusTrackingManagerMixin:UpdateBarVisuals calls
--- SetScale(self.ClassicScale) on the manager, so a width set in the
--- container's own coordinate space does not render at that many screen
--- pixels: 454 in a container scaled 1.4 draws 636 wide, which is what made
--- the bar overshoot the stack on the right. Converting through effective
--- scales makes it match whatever the bar actually measures, whatever either
--- scale happens to be.
-local function wantedWidth(container)
-    local configured = Config:Get("statusBarWidth")
-    if not Config:Enabled("statusBarWidth") or configured == 0 then return nil end
-
-    local bar = _G["MainActionBar"]
-    if not (bar and bar.GetWidth and container.GetEffectiveScale) then return configured end
-
-    local barWidth = bar:GetWidth()
-    if not barWidth or barWidth <= 0 then return configured end
-
-    local barScale = (bar.GetEffectiveScale and bar:GetEffectiveScale()) or 1
-    local ownScale = container:GetEffectiveScale() or 1
-    if ownScale <= 0 then return configured end
-
-    return barWidth * barScale / ownScale
-end
-
--- Scale every segment by the same factor so the art keeps its proportions;
--- stretching only the middle would distort those slices against each other,
--- since each carries its own TexCoords into the source image.
-local function scaleArt(container, want)
-    for _, chain in ipairs(SEGMENT_CHAINS) do
-        local total = 0
-        local segs = {}
-        for _, key in ipairs(chain) do
-            local tex = container[key]
-            if tex and tex.GetWidth then
-                if savedWidth[tex] == nil then savedWidth[tex] = tex:GetWidth() end
-                total = total + (savedWidth[tex] or 0)
-                segs[#segs + 1] = tex
-            end
-        end
-        if total > 0 then
-            local factor = want and (want / total) or 1
-            for _, tex in ipairs(segs) do
-                tex:SetWidth((savedWidth[tex] or 0) * factor)
-            end
-        end
-    end
-end
-
-local function applyWidth()
-    local list = containers()
-    if not list then return end
-
-    for _, container in ipairs(list) do
-        local want = wantedWidth(container)
-        setWidth(container, want)
-        scaleArt(container, want)
-        if container.bars then
-            -- Keyed by StatusTrackingBarInfo.BarsEnum, so pairs not ipairs.
-            for _, bar in pairs(container.bars) do
-                setWidth(bar, want)
-                setWidth(bar.StatusBar, want)
-            end
-        end
-    end
-end
-
--- Apply runs on every ApplyAll; width is cheap and idempotent.
-local applyText = StatusBars.Apply
-function StatusBars:Apply()
-    applyText(self)
-    applyWidth()
 end
 
 function StatusBars:Init()
-    local mgr = _G["StatusTrackingBarManager"]
-    if mgr and mgr.UpdateBarVisuals then
-        hooksecurefunc(mgr, "UpdateBarVisuals", function()
-            ns:SafeCall("StatusBars:width", applyWidth)
-        end)
-        StatusBars.hookedVisuals = true
-    end
+    ensureBars()
+
+    ns:On("PLAYER_XP_UPDATE", function(unit)
+        if not unit or unit == "player" then StatusBars:Refresh() end
+    end)
+    ns:On("UPDATE_EXHAUSTION", function() StatusBars:Refresh() end)
+    ns:On("PLAYER_LEVEL_UP", function() StatusBars:Refresh() end)
+    ns:On("UPDATE_FACTION", function() StatusBars:Refresh() end)
+    ns:On("EDIT_MODE_LAYOUTS_UPDATED", function() StatusBars:Refresh() end)
 end
 
 function StatusBars:StatusText()
-    if getCVar() == nil then
-        return "status bars: |cffff8080no xpBarText cvar|r"
+    if not (UnitXP and UnitXPMax) then
+        return "status bars: |cffff8080XP API unavailable|r"
     end
     return nil
 end
 
 function StatusBars:Status()
-    local current = getCVar()
-    if current == nil then
-        ns:Print("status bars: |cffff8080xpBarText cvar not found|r")
-        return
-    end
-    ns:Print("status bars: xpBarText=%s |cff808080(one switch covers both the XP and reputation bar)|r",
-        tostring(current))
+    ensureBars()
+    local manager = _G["StatusTrackingBarManager"]
+    local alpha = manager and manager.GetAlpha and manager:GetAlpha() or "missing"
+    ns:Print("status bars: custom XP=%s, reputation=%s |cff808080(%dx%d, stock alpha=%s)|r",
+        tostring(bars.xp:IsShown()), tostring(bars.rep:IsShown()), WIDTH, HEIGHT,
+        tostring(alpha))
 end

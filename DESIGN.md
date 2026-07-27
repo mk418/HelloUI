@@ -44,9 +44,11 @@ ships in the client.
 
 ## Design philosophy
 
-1. **Keep Blizzard's frames.** Change their appearance, never their identity. No
-   texture set, no replacement unit frames, no reparenting. Masque is already
-   installed and already owns button art.
+1. **Keep Blizzard's frames unless replacing one is the safer boundary.** No
+   texture set, no replacement unit frames, no reparenting. The narrow exception
+   is XP/reputation: changing Blizzard's status-manager geometry tainted the Game
+   Menu, so two isolated addon-owned bars replace only that display. Masque is
+   already installed and already owns button art.
 2. **Delegate position to Edit Mode.** Every anchor / `x` / `y` / `anchorFrame`
    in the old profile is a job the client now does natively. Re-implementing it
    is how you end up with 3000-line action bar modules.
@@ -75,7 +77,7 @@ ships in the client.
 ## Current scope
 
 Ten features. Four are switches; the other six are simply what the addon does
-— hiding the gryphons and bar backdrop, always-visible XP and reputation text,
+— hiding the gryphons and bar backdrop, compact XP and reputation bars,
 hiding the time-of-day dial, class-colouring the player health bar, yielding the
 cast bar to a sibling that draws its own, and the flat cast bar. Those started as
 settings because everything did, and a switch implies a decision worth making:
@@ -180,38 +182,24 @@ DragonflightUI's layout was its default.
   context and persist into the player's saved layout. Takes the latency strip
   with it exactly as Blizzard's setting does; the micro menu and bag bar are
   children of `UIParent` and unaffected.
-- **Status bar width** — the XP/reputation bars ship 1024px wide, far wider
-  than the 454px action bar stack. Edit Mode has no width control for them:
-  its `Size` setting is a *scale* (`SetScale(value / 100)`), so narrowing with
-  it squashes the height too, and it floors at 50% — still wider than the
-  stack. So the width is set directly, on three frames per container, because
-  they do not follow each other: `StatusTrackingBarTemplate`'s inner
-  `StatusBar` carries an explicit `<Size x="1024">` anchored only at `RIGHT`,
-  and `InitializeBars` stamps that size in again at creation. Re-asserted after
-  `UpdateBarVisuals`, hooked on the manager *instance*.
+- **XP and reputation bars** — two addon-owned 454×10px bars match the action
+  stack without writing geometry into `StatusTrackingBarManager`. The stock
+  manager remains alive for Blizzard's bookkeeping and is made transparent;
+  its containers are never resized, hidden, re-anchored or hooked. That avoids
+  feeding addon-written dimensions back into UI panel positioning, which can
+  taint the Game Menu's protected Logout/Exit callback.
 
-  The **border art has to be scaled separately**. It is a fixed chain of
-  textures anchored left-to-right from the container's edge — standalone is
-  16 + 240 + 256 + 256 + 256 = 1024, main-menu is 4 × 256 — and none of them
-  follow the frame. Resize the container alone and Edit Mode's selection box
-  is correct while the bar drawn on screen is still full width, which is a
-  properly confusing symptom. Every segment scales by the same factor so the
-  slices keep their proportions; the 9×9 end caps share the same `parentArray`
-  and must be left alone, so the segments are named rather than walked.
-
-  The width is **derived from `MainActionBar` at apply time, through effective
-  scales**, not stored as a constant. `UpdateBarVisuals` calls
-  `SetScale(self.ClassicScale)` on the manager, so a width set in the
-  container's own coordinate space is not that many screen pixels — 454 in a
-  container scaled 1.4 draws 636 and overshoots the stack on the right.
-- **Status bar text** — make the XP and reputation bar numbers permanently
-  readable instead of mouseover-only. This is one setting, not the profile's
-  two, and it is a single CVar write: Blizzard's own
-  `StatusTrackingBarMixin:ShouldBarTextBeDisplayed` is
-  `GetCVarBool("xpBarText") or self.textLocked or manager:IsTextLocked()`, and
-  the two `textLocked` terms are the mouseover machinery — set on enter, cleared
-  on leave — so neither can be held. Both bars share that predicate, so there is
-  one switch behind them and splitting it would be a lie.
+  The XP bar reads `UnitXP`, `UnitXPMax` and `GetXPExhaustion`; its rested fill
+  extends behind the earned-XP fill. The reputation bar reads the watched
+  faction through `C_Reputation.GetWatchedFactionData`, with the legacy
+  `GetWatchedFactionInfo` as a feature-detected fallback, and normalizes the
+  value to the current standing's thresholds. Values and percentages are
+  always printed on the addon-owned bars, so HelloUI no longer changes the
+  player's `xpBarText` CVar. Max level is checked explicitly against the
+  client's player-level cap rather than inferred solely from `UnitXPMax == 0`.
+  When only one bar exists it occupies the bottom slot; with both present,
+  reputation stacks immediately above XP. Their top edge is 24px above the
+  screen and the action stack starts at 30px, leaving a 6px separation.
 - **Class-coloured player health bar** — `PlayerFrameHealthBar` recoloured to
   class. No hook required: `UnitFrameHealthBar_Update` guards its colour write
   with `if not statusbar.lockColor`, so setting `lockColor` makes Blizzard stop
@@ -228,9 +216,9 @@ DragonflightUI's layout was its default.
 - **Minimap** — hide the time-of-day dial. Not a calendar: Era loads
   `GameTime_NoCalendar`, so `GameTimeFrame` here is the sun/moon indicator, with
   no click action at all. No positioning ships — see *Out of scope*.
-- **The bar layout** — reproduces DragonflightUI's default arrangement: bars
-  stacked and centred upward from the status bars, the two 3-row blocks
-  flanking them at ±64, 80% icons, 2px padding.
+- **The bar layout** — reproduces DragonflightUI's default arrangement: action
+  bars stacked and centred above the custom status bars, with two 3-row flank
+  blocks, full-size icons and 2px padding.
 
   This is not a contradiction of "delegate position to Edit Mode" — it is that
   rule taken seriously. Instead of fighting Edit Mode with `SetPoint` on frames
@@ -257,9 +245,9 @@ DragonflightUI's layout was its default.
   action bar frame is shorter than the buttons it contains, so a 2px gap from
   the frame's top edge lands inside the row above.
 
-  The XP and reputation bars are repositioned too. Blizzard's preset anchors
-  them to `StatusTrackingBarManager`, which strands them among the button rows
-  once the main bar art they sat on is hidden.
+  The XP and reputation bars are not Edit Mode systems at all now. They are
+  addon-owned frames anchored directly below the stack, while the untouched
+  stock systems remain in the copied layout and are visually suppressed.
 
   Named after the profile: `Default` keeps the bare `HelloUI`, anything else
   gets `HelloUI - <profile>`. Changing profile changes layout with it —
@@ -303,25 +291,19 @@ DragonflightUI's layout was its default.
 - **Nameplates** — TidyPlates_ThreatPlates is installed.
 - **Range display** — RangeDisplay is installed, and HelloRangeDisplay exists.
 - **XP and reputation tracking.** HelloLog owns the per-session numbers
-  (`XP.lua`, `Rep.lua`, pure tracking, no frames). HelloUI only changes whether
-  Blizzard's existing bar text is legible.
+  (`XP.lua`, `Rep.lua`, pure tracking, no frames). HelloUI only renders current
+  progress bars; it stores no history and computes no session totals.
 - **Minimap buttons.** Four siblings park a `Hello*MinimapButton` directly on
   the Minimap frame: HelloGear, HelloLog, HelloStock and HelloWorldBuffs.
   HelloUI adds none and touches none.
 - **Chat frame size and position.** `ChatFrame1` inherits
   `EditModeChatFrameSystemTemplate` on 1.15.9, and Edit Mode's preset carries
-  its anchor *and* its width and height (430x120 at BOTTOMLEFT). So this is the
-  minimap argument again, and it has to be answered the same way or the rule
-  means nothing: a pin would drive the Edit Mode overrides, write manager state
-  in our taint context, and be reverted on the next layout save. The old
-  profile's 460x207 at 42,35 is reproducible in Edit Mode by dragging.
-
-  What *is* in scope, and worth stating plainly because the two look alike: the
-  bar layout writes a position for the chat frame into the layout itself
-  (`Enum.EditModeSystem.ChatFrame`, lifted clear of the bottom-left flank block).
-  That is Edit Mode's own data written through `C_EditMode.SaveLayouts`, not an
-  anchor set behind its back — the distinction this whole section turns on. No
-  separate setting, because applying the layout is the decision.
+  its anchor *and* its width and height. The bar layout therefore writes the
+  chat position and a 250px height into the layout itself, lifting its bottom
+  edge clear of both the bottom-left flank block and the left-aligned stance
+  bar. It preserves the preset's width. This is Edit Mode's own data written
+  through `C_EditMode.SaveLayouts`, not a `SetPoint` or `SetHeight` made behind
+  its back, so the result remains editable and persistent in Edit Mode.
 - **Minimap position.** Stock 1.15.9 already anchors the minimap TOPRIGHT at
   offset 0,0 — both Edit Mode preset layouts say so and the XML agrees — so
   there is nothing to tuck. DragonflightUI's `+7` was compensating for dead
@@ -354,7 +336,7 @@ HelloUI/
 ├── Buttons.lua     -- keybind / macro text alpha across every bar
 ├── Bars.lua        -- the bar table; native proxy for 2-8, alpha for the
 │                      rest; gryphons and backdrop
-├── StatusBars.lua  -- the xpBarText cvar
+├── StatusBars.lua  -- addon-owned XP and watched-reputation bars
 ├── Player.lua      -- class-coloured player health bar via lockColor
 ├── Darkmode.lua    -- desaturate + tint over an explicit allowlist
 ├── Minimap.lua     -- time-of-day dial, the tracking button, the clock
@@ -380,10 +362,10 @@ called, and it is mutation-tested to confirm it fails when the code is wrong.
 Every Hello addon in `~/code/mk418` was checked against these features. None
 of them overlap: no sibling touches `HotKey`, `MainMenuBar`, `MultiBar`,
 `StanceBar`, `PlayerFrame`, `MinimapCluster`, `GameTimeFrame`,
-`StatusTrackingBarManager`, or repositions `ChatFrame1`. So nothing here is
-dropped in favour of a sibling — but three of them are close enough to demand
-rules, because HelloUI is the only one of the family that modifies frames it
-doesn't own.
+the XP/reputation APIs, or repositions `ChatFrame1`. So nothing here is dropped
+in favour of a sibling — but three of them are close enough to demand rules,
+because HelloUI is the only one of the family that modifies frames it doesn't
+own.
 
 **Darkmode allowlists Blizzard textures. It never sweeps.** Two reasons, both
 fatal. HelloGear, HelloLog, HelloStock and HelloWorldBuffs all create
@@ -582,10 +564,11 @@ source and an assumption disagreed, the source won.
   `UnitFrameHealthBar_Update` guards its colour write with
   `if not statusbar.lockColor`, on both the connected and disconnected paths, so
   `lockColor = true` is Blizzard handing the colour over.
-- **Status tracking.** Keep `StatusTrackingBarManager` — DragonflightUI hid it
-  and built replacements, which is the opposite of what's wanted. Text
-  visibility is `GetCVarBool("xpBarText")`; the per-bar and per-manager
-  `textLocked` flags are the mouseover path and are cleared on mouse-out.
+- **Status tracking.** Keep `StatusTrackingBarManager` alive but transparent,
+  and render XP/reputation in addon-owned frames. Never resize its containers,
+  hook `UpdateBarVisuals`, call manager refresh methods, or modify its Edit Mode
+  entries: Blizzard reaches the manager from UI panel positioning, so values it
+  reads back can taint the Game Menu before its protected Logout/Exit callback.
 - **Time-of-day dial, not a calendar.** Era loads `GameTime_NoCalendar`, so
   `GameTimeFrame` is a `Frame` (not a `Button`) showing `UI-TOD-Indicator`, with
   no `OnClick` and no `EnableMouse` anywhere — its tooltip script is unreachable.
@@ -639,7 +622,12 @@ source and an assumption disagreed, the source won.
   `loadDeprecationFallbacks` CVar. Not needed here; noted so it stays not-needed.
 - **Taint.** Bar enable/disable and any re-anchor of a secure frame must be
   `InCombatLockdown()`-gated and replayed on `PLAYER_REGEN_ENABLED`. This is what
-  the out-of-combat apply queue in Core.lua is for.
+  the out-of-combat apply queue in Core.lua is for. Layout activation stops at
+  `C_EditMode.SaveLayouts` / `C_EditMode.SetActiveLayout`; never synthesize a
+  `ShowUIPanel` / `HideUIPanel` Edit Mode refresh from addon code. The profile
+  selector uses addon-owned buttons instead of `UIDropDownMenuTemplate`, so it
+  never writes into the shared `DropDownList1` pool. Both older mechanisms can
+  propagate addon taint into GameMenuFrame's protected callbacks.
 
 ---
 
@@ -649,7 +637,7 @@ source and an assumption disagreed, the source won.
    override against the account layout.
 2. `PLAYER_LOGIN` — install hooks (button update, player health, cast bar),
    register the options panel.
-3. `PLAYER_ENTERING_WORLD` — first full apply: button text, status bar text,
+3. `PLAYER_ENTERING_WORLD` — first full apply: button text, custom status bars,
    darkmode, minimap, chat. Bar enable/disable goes through the apply queue.
 4. `PLAYER_REGEN_ENABLED` — drain the apply queue.
 

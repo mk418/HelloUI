@@ -58,12 +58,6 @@ local accountDefaults = {
         bar8 = true,
     },
 
-    -- Width of the XP/reputation bars, matched to the action bar stack: 12
-    -- buttons at a 38px pitch, less the trailing padding. Edit Mode offers no
-    -- width control for these - only a scale, which squashes the height - so
-    -- this is set directly. 0 leaves Blizzard's 1024 alone.
-    statusBarWidth = 454,
-
     -- Darkmode.lua. Desaturate plus a flat grey tint, per area, matching the
     -- old module's own defaults (0.4 grey everywhere except unit frames,
     -- which used 77/255 - close enough to the same intent that one value
@@ -129,12 +123,11 @@ local accountDefaults = {
     -- and far too large.
     minimapSize = 6,
 
-    -- No chat settings, which is not the same as not placing the chat frame.
-    -- The old profile pinned ChatFrame1 to 460x207 at 42,35; on 1.15.9 it
-    -- inherits EditModeChatFrameSystemTemplate, so its anchor and its size
-    -- belong to Edit Mode - and the layout sets its position there, along with
-    -- the minimap's. Neither needs a switch of its own: applying the layout is
-    -- the decision, and Edit Mode owns them both afterwards.
+    -- No chat toggle, which is not the same as ignoring the chat frame. On
+    -- 1.15.9 it inherits EditModeChatFrameSystemTemplate, so its anchor and
+    -- size belong to Edit Mode. The layout raises it above the stance bar and
+    -- gives it a 250px height there; applying the layout is the decision, and
+    -- Edit Mode owns it afterwards.
 
     -- Layout.lua. At login, offer the DragonflightUI bar arrangement as a
     -- real Edit Mode layout - asked, never applied silently, and only when it
@@ -327,10 +320,10 @@ end
 -- the one it uses. Switching profile is switching which table every Get reads.
 --
 -- What deliberately does NOT live in a profile: the things HelloUI remembers
--- about BLIZZARD's state - xpBarTextOriginal, proxyOriginals - and the
--- migration latches. Those are memory of what the client looked like before we
--- touched it, not preferences, and copying them into a profile would mean a
--- profile switch could hand back the wrong original.
+-- about BLIZZARD's state - proxyOriginals and the legacy xpBarTextOriginal -
+-- plus migration latches. Those are memory of what the client looked like
+-- before we touched it, not preferences, and copying them into a profile would
+-- mean a profile switch could hand back the wrong original.
 --------------------------------------------------------------------------
 
 local function profiles()
@@ -557,4 +550,3 @@ function Config:ProfileCommand(rest)
     report()
     ns:Print("usage: /hui profile |cff808080[use <name> | new <name> | delete <name>]|r")
 end
-

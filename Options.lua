@@ -132,8 +132,8 @@ local subtitle = content:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmal
 subtitle:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -8)
 subtitle:SetWidth(560)
 subtitle:SetJustifyH("LEFT")
-subtitle:SetText("De-clutters the stock interface. No art overhaul, no replacement frames - " ..
-    "anything it positions goes through a Blizzard Edit Mode layout.")
+subtitle:SetText("De-clutters the stock interface. Stock-frame positioning goes through " ..
+    "Blizzard Edit Mode; XP and reputation use compact addon-owned bars.")
 
 -- What the addon does without being asked. Listed rather than left implicit:
 -- these were checkboxes until they were not, and a panel that simply stopped
@@ -143,8 +143,8 @@ alwaysNote:SetPoint("TOPLEFT", subtitle, "BOTTOMLEFT", 0, -6)
 alwaysNote:SetWidth(560)
 alwaysNote:SetJustifyH("LEFT")
 alwaysNote:SetSpacing(2)
-alwaysNote:SetText("Always on: gryphons and bar backdrop hidden, XP and reputation text " ..
-    "always visible, time-of-day dial hidden, class-coloured player health, and a flat " ..
+alwaysNote:SetText("Always on: gryphons and bar backdrop hidden, compact XP and reputation " ..
+    "bars, time-of-day dial hidden, class-coloured player health, and a flat " ..
     "cast bar that steps aside when a sibling addon draws its own.")
 
 local enabledCheck = SettingCheck("Enabled", "Enable HelloUI", alwaysNote, "BOTTOMLEFT", -2, -14, "enabled",
@@ -194,9 +194,8 @@ local stanceCheck = SubCheck("BarOffstance", "Stance", barChecks[1], "TOPLEFT",
 SubCheck("BarOffpet", "Pet", stanceCheck, "TOPLEFT",
     80, 0, "barsOff", "pet", BAR_TOOLTIP)
 
--- No "Status bars" or "Unit frames" sections any more: the XP/reputation text
--- and the class-coloured health bar are unconditional now, and neither section
--- had anything else in it.
+-- No "Status bars" or "Unit frames" sections: the custom XP/reputation bars
+-- and the class-coloured health bar are unconditional while HelloUI is on.
 
 -- Right column ---------------------------------------------------------
 
@@ -229,8 +228,8 @@ layoutNote:SetPoint("TOPLEFT", layoutHeader, "BOTTOMLEFT", 2, -8)
 layoutNote:SetWidth(260)
 layoutNote:SetJustifyH("LEFT")
 layoutNote:SetSpacing(2)
-layoutNote:SetText("An Edit Mode layout named HelloUI: the bars, the XP and " ..
-    "reputation bars, the cast bar, the chat frame, the minimap and its size, " ..
+layoutNote:SetText("An Edit Mode layout named HelloUI: the action bars, cast " ..
+    "bar, chat frame, minimap and its size, " ..
     "the micro menu and the bags. Drag any of it in Edit Mode afterwards - your " ..
     "changes are saved into the layout, and re-applying is the reset.")
 
@@ -258,26 +257,45 @@ profileNote:SetText("Every setting on this panel belongs to the profile below. "
     "Characters pick a profile each, so alts can differ - and the bar layout " ..
     "follows it too.")
 
-local profileDrop = CreateFrame("Frame", "HelloUIOptProfile", content, "UIDropDownMenuTemplate")
-profileDrop:SetPoint("TOPLEFT", profileNote, "BOTTOMLEFT", -18, -4)
-if UIDropDownMenu_SetWidth then UIDropDownMenu_SetWidth(profileDrop, 170) end
-if UIDropDownMenu_Initialize then
-    UIDropDownMenu_Initialize(profileDrop, function(_, level)
-        for _, name in ipairs(Config:ProfileNames()) do
-            local info = UIDropDownMenu_CreateInfo()
-            info.text = name
-            info.checked = (name == Config:ProfileName())
-            info.func = function()
-                Config:UseProfile(name)
-                if UIDropDownMenu_SetText then UIDropDownMenu_SetText(profileDrop, name) end
-                Apply()
-                Options:Refresh()
-                ns:Print("profile: switched to |cffffd100%s|r", name)
-            end
-            UIDropDownMenu_AddButton(info, level)
+-- UIDropDownMenuTemplate writes into Blizzard's shared DropDownList1 pool.
+-- Keeping the profile selector addon-owned prevents that global state from
+-- carrying HelloUI taint into the Game Menu's protected callbacks.
+local profilePrev = CreateFrame("Button", "HelloUIOptProfilePrev", content, "UIPanelButtonTemplate")
+profilePrev:SetSize(26, 22)
+profilePrev:SetPoint("TOPLEFT", profileNote, "BOTTOMLEFT", 2, -6)
+profilePrev:SetText("<")
+
+local profileName = CreateFrame("Button", "HelloUIOptProfile", content, "UIPanelButtonTemplate")
+profileName:SetSize(170, 22)
+profileName:SetPoint("LEFT", profilePrev, "RIGHT", 4, 0)
+
+local profileNext = CreateFrame("Button", "HelloUIOptProfileNext", content, "UIPanelButtonTemplate")
+profileNext:SetSize(26, 22)
+profileNext:SetPoint("LEFT", profileName, "RIGHT", 4, 0)
+profileNext:SetText(">")
+
+local function stepProfile(delta)
+    local names = Config:ProfileNames()
+    if #names < 2 then return end
+
+    local current = 1
+    for i, name in ipairs(names) do
+        if name == Config:ProfileName() then
+            current = i
+            break
         end
-    end)
+    end
+
+    local index = ((current - 1 + delta) % #names) + 1
+    local name = names[index]
+    Config:UseProfile(name)
+    Apply()
+    Options:Refresh()
+    ns:Print("profile: switched to |cffffd100%s|r", name)
 end
+
+profilePrev:SetScript("OnClick", function() stepProfile(-1) end)
+profileNext:SetScript("OnClick", function() stepProfile(1) end)
 
 -- Naming a new profile needs a text box, and StaticPopup is the only one of
 -- those that does not mean building a dialog frame from scratch.
@@ -306,7 +324,7 @@ StaticPopupDialogs["HELLOUI_NEW_PROFILE"] = {
 
 local newProfileBtn = CreateFrame("Button", nil, content, "UIPanelButtonTemplate")
 newProfileBtn:SetSize(150, 22)
-newProfileBtn:SetPoint("TOPLEFT", profileDrop, "BOTTOMLEFT", 20, -4)
+newProfileBtn:SetPoint("TOPLEFT", profilePrev, "BOTTOMLEFT", 0, -6)
 newProfileBtn:SetText("New from this one")
 newProfileBtn:SetScript("OnClick", function()
     if StaticPopup_Show then StaticPopup_Show("HELLOUI_NEW_PROFILE") end
@@ -392,7 +410,7 @@ function Options:Refresh()
         cb:SetChecked(cb.getValue() and true or false)
     end
 
-    if UIDropDownMenu_SetText then UIDropDownMenu_SetText(profileDrop, Config:ProfileName()) end
+    profileName:SetText(Config:ProfileName())
 
     local lines = {}
 

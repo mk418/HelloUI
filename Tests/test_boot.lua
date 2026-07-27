@@ -43,7 +43,7 @@ local Frame = {}
 -- `if frame.SomeField then` true for fields that do not exist - and that
 -- pattern is load-bearing throughout the addon.
 local NOOP_METHODS = {
-    "SetFrameStrata", "SetFrameLevel", "SetJustifyV", "SetSpacing", "SetMinMaxValues", "SetValueStep", "SetValue",
+    "SetFrameStrata", "SetFrameLevel", "SetJustifyV", "SetSpacing", "SetValueStep",
     "SetObeyStepOnDrag", "SetOwner", "AddLine", "SetTexCoord", "SetDrawLayer",
     "RegisterForClicks", "RegisterForDrag", "SetMovable", "SetClampedToScreen",
     "SetUserPlaced", "SetToplevel", "SetFont", "GetFont",
@@ -100,6 +100,11 @@ end
 function Frame:SetText(t) self._text = t end
 function Frame:GetText() return self._text end
 function Frame:SetTextColor(r, g, b) self._color = { r, g, b } end
+function Frame:SetMinMaxValues(low, high) self._min, self._max = low, high end
+function Frame:GetMinMaxValues() return self._min, self._max end
+function Frame:SetValue(value) self._value = value end
+function Frame:GetValue() return self._value end
+function Frame:SetStatusBarTexture(texture) self._statusTexture = texture end
 
 function Frame:GetName() return self._name end
 function Frame:GetParent() return self._parent end
@@ -123,9 +128,8 @@ function Frame:GetChildren() return unpackf(self._children or {}) end
 function Frame:GetRegions() return unpackf(self._regions or {}) end
 function Frame:GetNumRegions() return #(self._regions or {}) end
 function Frame:SetSize(w, h) self._w, self._h = w, h end
--- Real, not no-ops: the status bar width and tracking-icon features read
--- these back. Anything stubbed here can let a feature "pass" while doing
--- nothing at all, which has happened twice.
+-- Real, not no-ops: the tracking-icon feature reads these back. Anything
+-- stubbed here can let a feature "pass" while doing nothing at all.
 function Frame:SetWidth(w) self._w = w end
 function Frame:SetHeight(h) self._h = h end
 function Frame:SetParent(p) self._parent = p end
@@ -286,6 +290,25 @@ _G.Settings = {
 -- Class colours
 _G.UnitClass = function() return "Warrior", "WARRIOR" end
 _G.UnitName = function() return "Elouan" end
+local playerXP, playerXPMax, restedXP = 12345, 20000, 4000
+local playerLevel, playerLevelCap = 42, 60
+_G.UnitLevel = function() return playerLevel end
+_G.GetMaxPlayerLevel = function() return playerLevelCap end
+_G.UnitXP = function() return playerXP end
+_G.UnitXPMax = function() return playerXPMax end
+_G.GetXPExhaustion = function() return restedXP end
+local watchedFaction = {
+    name = "Stormwind", reaction = 5,
+    currentReactionThreshold = 3000,
+    nextReactionThreshold = 9000,
+    currentStanding = 7500,
+}
+_G.C_Reputation = {
+    GetWatchedFactionData = function() return watchedFaction end,
+}
+_G.FACTION_BAR_COLORS = {
+    [5] = { r = 0.10, g = 0.70, b = 0.10 },
+}
 
 -- StaticPopup: record which dialog was raised so the prompt can be asserted
 -- on and then answered, rather than silently never firing.
@@ -293,21 +316,6 @@ _G.StaticPopupDialogs = {}
 _G._shownPopup = nil
 _G.StaticPopup_Show = function(which) _G._shownPopup = which end
 
--- Dropdown menu API, enough of it to build the profile picker and to drive its
--- entries: the test needs to click one, so AddButton keeps the info tables.
-_G.UIDropDownMenu_SetWidth = function() end
-_G.UIDropDownMenu_SetText = function(frame, text) frame._text = text end
-_G.UIDropDownMenu_CreateInfo = function() return {} end
-_G.UIDropDownMenu_Initialize = function(frame, fn) frame._initialize = fn end
-_G.UIDropDownMenu_AddButton = function(info)
-    _G._dropdownEntries = _G._dropdownEntries or {}
-    _G._dropdownEntries[#_G._dropdownEntries + 1] = info
-end
-_G._openDropdown = function(frame)
-    _G._dropdownEntries = {}
-    if frame._initialize then frame._initialize(frame, 1) end
-    return _G._dropdownEntries
-end
 _G.RAID_CLASS_COLORS = { WARRIOR = { r = 0.78, g = 0.61, b = 0.43 }, MAGE = { r = 0.41, g = 0.8, b = 0.94 } }
 _G.LOCALIZED_CLASS_NAMES_MALE = { WARRIOR = "Warrior", MAGE = "Mage" }
 _G.LOCALIZED_CLASS_NAMES_FEMALE = { WARRIOR = "Warrior", MAGE = "Mage" }
@@ -334,6 +342,10 @@ _G.Enum.EditModeMinimapSetting = { HeaderUnderneath = 0, RotateMinimap = 1, Size
 _G.Enum.EditModeStatusTrackingBarSystemIndices = { StatusTrackingBar1 = 1, StatusTrackingBar2 = 2 }
 _G.Enum.EditModeStatusTrackingBarSetting = { Size = 0 }
 _G.Enum.EditModeCastBarSetting = { BarSize = 0, LockToPlayerFrame = 1 }
+_G.Enum.EditModeChatFrameSetting = {
+    WidthHundreds = 0, WidthTensAndOnes = 1,
+    HeightHundreds = 2, HeightTensAndOnes = 3,
+}
 _G.Enum.ActionBarOrientation = { Horizontal = 0, Vertical = 1 }
 _G.Enum.EditModeActionBarSystemIndices = {
     MainBar = 1, Bar2 = 2, Bar3 = 3, RightBar1 = 4, RightBar2 = 5,
@@ -380,7 +392,10 @@ _G.EditModePresetLayoutManager = {
             -- ChatFrame and Minimap: systems with settings directly.
             table.insert(systems, { system = 6, systemIndex = nil,
                 anchorInfo = { point = "BOTTOMLEFT", relativeTo = "UIParent", relativePoint = "BOTTOMLEFT", offsetX = 0, offsetY = 0 },
-                settings = {}, isInDefaultPosition = true })
+                settings = {
+                    { setting = 0, value = 4 }, { setting = 1, value = 30 },
+                    { setting = 2, value = 1 }, { setting = 3, value = 20 },
+                }, isInDefaultPosition = true })
             -- CastBar: a system with settings directly, so systemIndex nil.
             table.insert(systems, { system = 5, systemIndex = nil,
                 anchorInfo = { point = "CENTER", relativeTo = "UIParent", relativePoint = "CENTER", offsetX = 0, offsetY = 0 },
@@ -396,8 +411,12 @@ _G.EditModePresetLayoutManager = {
 
 _G.EditModeManagerFrame = Frame.new("EditModeManagerFrame", _G.UIParent)
 _G.EditModeManagerFrame.accountSettings = {}
-_G.ShowUIPanel = function() _G._editModeKicked = (_G._editModeKicked or 0) + 1 end
-_G.HideUIPanel = function() end
+_G.ShowUIPanel = function()
+    _G._protectedPanelCalls = (_G._protectedPanelCalls or 0) + 1
+end
+_G.HideUIPanel = function()
+    _G._protectedPanelCalls = (_G._protectedPanelCalls or 0) + 1
+end
 
 -- savedLayouts is what the client stores and what GetLayouts hands back.
 local savedLayouts = {}
@@ -842,53 +861,66 @@ eq(_G.ActionButton1._mouse, true, "bar1 buttons interactive again")
 ----------------------------------------------------------------------
 
 print("\nstatus bars")
-eq(cvars.xpBarText, "1", "xpBarText set")
+eq(cvars.xpBarText, "0", "the player's xpBarText CVar is left alone")
+eq(_G.StatusTrackingBarManager:GetAlpha(), 0, "Blizzard status manager made transparent")
 
-print("\nstatus bar width")
+local xpBar = _G.HelloUIXPBar
+local repBar = _G.HelloUIRepBar
+ok(xpBar:IsShown(), "custom XP bar shown while levelling")
+ok(repBar:IsShown(), "custom reputation bar shown for the watched faction")
+eq(xpBar:GetWidth(), 454, "custom XP bar matches the action stack width")
+eq(repBar:GetWidth(), 454, "custom reputation bar matches the action stack width")
+eq(xpBar:GetHeight(), 10, "custom XP bar keeps a readable height")
+eq(xpBar.fill:GetValue(), 12345, "XP fill reflects current experience")
+eq(xpBar.rested:GetValue(), 16345, "rested fill extends past current experience")
+eq(repBar.fill:GetValue(), 4500, "reputation is normalized to its standing threshold")
+eq(select(2, repBar.fill:GetMinMaxValues()), 6000, "reputation maximum is the standing span")
+ok(xpBar.text:GetText():find("61.7%%") ~= nil, "XP percentage is always visible")
+ok(repBar.text:GetText():find("Stormwind", 1, true) ~= nil, "watched faction name is visible")
+eq(select(5, xpBar:GetPoint(1)), 3, "XP bar starts at the bottom of the action stack")
+eq(select(5, repBar:GetPoint(1)), 14, "reputation bar stacks immediately above XP")
+
+playerXP = 15000
+fire("PLAYER_XP_UPDATE", "player")
+eq(xpBar.fill:GetValue(), 15000, "XP events refresh the custom fill")
+watchedFaction = nil
+fire("UPDATE_FACTION")
+eq(repBar:IsShown(), false, "reputation bar hides without a watched faction")
+eq(select(5, xpBar:GetPoint(1)), 3, "remaining bar compacts to the bottom slot")
+watchedFaction = {
+    name = "Stormwind", reaction = 5,
+    currentReactionThreshold = 3000,
+    nextReactionThreshold = 9000,
+    currentStanding = 7500,
+}
+playerXP = 12345
+fire("UPDATE_FACTION")
+fire("PLAYER_XP_UPDATE", "player")
+
+playerLevel = playerLevelCap
+playerXPMax = 20000
+fire("PLAYER_LEVEL_UP", 60)
+eq(xpBar:IsShown(), false, "XP bar hides at maximum level even when UnitXPMax is nonzero")
+eq(repBar:IsShown(), true, "watched reputation remains at maximum level")
+eq(select(5, repBar:GetPoint(1)), 3, "reputation compacts into the bottom slot at maximum level")
+playerLevel = 42
+playerXPMax = 20000
+fire("PLAYER_XP_UPDATE", "player")
+
+print("\nstatus bar safety")
 do
     local c = _G._statusContainer
-    eq(c:GetWidth(), 454, "container narrowed to the action bar stack width")
-
-    -- The frame alone is not enough: the border art is a separate fixed chain
-    -- and leaving it at 1024 is what made Edit Mode look right while the bar
-    -- on screen was still full width.
-    local artTotal = 0
-    for _, key in ipairs({ "StandaloneFrameTexture1", "StandaloneFrameTexture2",
-                           "StandaloneFrameTexture3", "StandaloneFrameTexture4",
-                           "StandaloneFrameTexture5" }) do
-        artTotal = artTotal + c[key]:GetWidth()
-    end
-    ok(math.abs(artTotal - 454) < 1,
-        ("border art spans the frame, not 1024 (got %.1f)"):format(artTotal))
-    -- Proportions preserved: the 16px left cap stays 16/1024 of the total.
-    ok(math.abs(c.StandaloneFrameTexture1:GetWidth() - 454 * 16 / 1024) < 0.5,
-        "art segments scaled proportionally, not stretched unevenly")
+    eq(c:GetWidth(), 1024, "status container geometry left to Blizzard")
+    eq(c.StandaloneFrameTexture1:GetWidth(), 16, "status art geometry left to Blizzard")
     for _, bar in pairs(c.bars) do
-        eq(bar:GetWidth(), 454, "inner bar narrowed")
-        -- The inner StatusBar has its own explicit width and is anchored only
-        -- at RIGHT, so it does not follow the parent and must be set too.
-        eq(bar.StatusBar:GetWidth(), 454, "inner StatusBar narrowed")
-        eq(bar.StatusBar:GetHeight(), 8, "height untouched - this is not a scale")
+        eq(bar:GetWidth(), 1024, "inner status bar geometry left to Blizzard")
+        eq(bar.StatusBar:GetWidth(), 1024, "inner StatusBar geometry left to Blizzard")
     end
-    ok(ns.StatusBars.hookedVisuals, "UpdateBarVisuals hooked so Blizzard cannot undo it")
-
-    -- Scale awareness. UpdateBarVisuals calls SetScale on the manager, so a
-    -- width in the container's own coordinate space is not that many screen
-    -- pixels: at 1.4 a naive 454 draws 636 wide and overshoots the stack.
-    -- The width must convert through effective scales.
-    c.GetEffectiveScale = function() return 1.4 end
-    ns.StatusBars:Apply()
-    local want = 454 / 1.4
-    ok(math.abs(c:GetWidth() - want) < 0.5,
-        ("scaled container asks for %.1f, not a naive 454 (got %.1f)"):format(want, c:GetWidth()))
-    ok(math.abs(c:GetWidth() * 1.4 - 454) < 1,
-        "so it renders the same screen width as the stack")
-    c.GetEffectiveScale = function() return 1 end
-    ns.StatusBars:Apply()
-    eq(c:GetWidth(), 454, "and back to 454 at scale 1")
-    -- Blizzard re-running its own pass must not widen them again.
+    eq(ns.StatusBars.hookedVisuals, nil, "UpdateBarVisuals is not hooked")
+    eq(_G._barTextRefreshed, nil, "manager refresh method is not called directly")
     _G.StatusTrackingBarManager:UpdateBarVisuals()
-    eq(c:GetWidth(), 454, "still narrow after Blizzard refreshes the bars")
+    eq(c:GetWidth(), 1024, "Blizzard refresh remains free of addon geometry writes")
+    eq(_G.StatusTrackingBarManager:GetAlpha(), 0, "stock manager remains visually suppressed")
 end
 
 print("\nplayer")
@@ -917,7 +949,7 @@ eq(_G._savedLayouts()[1].layoutName, "HelloUI", "named HelloUI")
 -- computed against the saved-only list points at a Blizzard preset and the
 -- player watches their UI switch to Classic.
 eq(_G._activeLayoutName(), "HelloUI", "the ACTIVE layout is ours, not a preset")
-ok((_G._editModeKicked or 0) > 0, "Edit Mode was nudged into applying it")
+eq(_G._protectedPanelCalls or 0, 0, "layout activation never opens protected panels")
 
 -- Once it is the active layout the question is retired for good.
 --
@@ -946,12 +978,13 @@ ns.Layout.askedThisSession = true
 
 do
     local sys, bars, moved = _G._savedLayouts()[1].systems, 0, 0
-    local mainBar, minimapSystem
+    local mainBar, stanceBar, minimapSystem
     for _, e in ipairs(sys) do
         if e.system == 1 then
             bars = bars + 1
             if not e.isInDefaultPosition then moved = moved + 1 end
             if e.systemIndex == 1 then mainBar = e end
+            if e.systemIndex == 11 then stanceBar = e end
         elseif e.system == 2 then
             minimapSystem = e
         end
@@ -977,26 +1010,30 @@ do
     eq(pad, 0, "icon padding raw 0 (= 2px)")
     eq(rows, 1, "main bar is one row")
     eq(mainBar.anchorInfo.relativeTo, "UIParent", "main bar pinned to UIParent")
-    eq(mainBar.anchorInfo.offsetY, 24, "main bar sits above the status bars")
+    eq(mainBar.anchorInfo.offsetY, 30, "main bar leaves a gap above both status bars")
 
-    -- The XP/reputation bars must be re-pinned under the stack. Left on
-    -- Blizzard's preset they anchor to StatusTrackingBarManager and end up
-    -- stranded among the button rows once the bar art is hidden.
+    local stanceSize
+    for _, st in ipairs(stanceBar.settings) do
+        if st.setting == 3 then stanceSize = st.value end
+    end
+    eq(stanceSize, 7, "stance icons are 120%, matching 36px action buttons")
+    eq(stanceBar.anchorInfo.point, "BOTTOMLEFT", "stance bar anchored by its left edge")
+    eq(stanceBar.anchorInfo.relativePoint, "BOTTOM", "stance bar aligned from screen centre")
+    eq(stanceBar.anchorInfo.offsetX, -227, "stance bar left edge matches the action stack")
+    eq(stanceBar.anchorInfo.offsetY, 144, "stance bar moves up with the action stack")
+
+    -- Blizzard's status systems remain byte-for-byte under Edit Mode's
+    -- ownership. HelloUI draws its own bars instead of writing manager geometry.
     local statusBars = 0
     for _, e in ipairs(sys) do
         if e.system == 4 then
             statusBars = statusBars + 1
-            eq(e.anchorInfo.relativeTo, "UIParent", "status bar re-pinned to UIParent")
-            eq(e.isInDefaultPosition, false, "status bar flagged as moved")
-            ok(e.anchorInfo.offsetY < 24, "status bar sits below the bottom action bar")
-            -- Only action bars take NumRows/IconSize; a status bar must not.
-            for _, st in ipairs(e.settings) do
-                ok(st.setting ~= 1 and st.setting ~= 3 and st.setting ~= 4,
-                    "no action bar settings written onto a status bar")
-            end
+            eq(e.anchorInfo.relativeTo, "StatusTrackingBarManager",
+                "stock status anchor remains Blizzard-owned")
+            eq(e.isInDefaultPosition, true, "stock status system is not marked as moved")
         end
     end
-    eq(statusBars, 2, "both status tracking slots positioned")
+    eq(statusBars, 2, "both untouched stock status systems remain in the layout")
 
     -- Bars 6-8 ship switched off, but must still be positioned: Blizzard's
     -- preset parks them in the middle of the screen, so an unpositioned bar
@@ -1010,19 +1047,6 @@ do
             ("bar %d positioned even though it ships off"):format(idx))
         ok(e ~= nil and e.anchorInfo.relativePoint == "BOTTOM",
             ("bar %d anchored to the bottom, not screen centre"):format(idx))
-    end
-
-    -- Size stays at 100%: it is a SCALE, so using it to narrow the bar
-    -- squashed the height too. Width is set directly instead - see the
-    -- status bar width regression below.
-    for _, e in ipairs(sys) do
-        if e.system == 4 then
-            local statusSize
-            for _, st in ipairs(e.settings) do
-                if st.setting == 0 then statusSize = st.value end
-            end
-            eq(statusSize, 10, "status bar left at 100% scale, so full height")
-        end
     end
 
     -- The cast bar is parked above the bars, not at screen centre, and is
@@ -1040,8 +1064,16 @@ do
         if e.system == 6 then chat6 = e end
     end
     ok(chat6 ~= nil, "chat frame positioned in the layout")
-    ok(chat6 and chat6.anchorInfo.offsetY > 24 + 38 * 3,
-        "chat sits above the flank block, not underneath it")
+    eq(chat6 and chat6.anchorInfo.offsetY, 194,
+        "chat lifted above both the flank block and stance row")
+    local chatSettings = {}
+    for _, st in ipairs((chat6 and chat6.settings) or {}) do
+        chatSettings[st.setting] = st.value
+    end
+    eq(chatSettings[0], 4, "chat width hundreds preserved from the preset")
+    eq(chatSettings[1], 30, "chat width remainder preserved from the preset")
+    eq(chatSettings[2], 2, "chat height hundreds set to 2")
+    eq(chatSettings[3], 50, "chat height remainder set to 50 (= 250px total)")
 
     -- The minimap is nudged one slider step larger: raw 5 is 100%, raw 6 110%.
     local map
@@ -1167,7 +1199,7 @@ do
     for _, e in ipairs(_G._savedLayouts()[1].systems) do
         if e.system == 1 and e.systemIndex == 1 then mainBar = e end
     end
-    eq(mainBar.anchorInfo.offsetY, 24, "reset restores the shipped position")
+    eq(mainBar.anchorInfo.offsetY, 30, "reset restores the shipped position")
     local size
     for _, st in ipairs(mainBar.settings) do
         if st.setting == 3 then size = st.value end
@@ -1595,12 +1627,12 @@ do
 end
 
 print("\nchat")
--- ChatFrame1 inherits EditModeChatFrameSystemTemplate on 1.15.9, so the addon
--- deliberately owns nothing here. Assert it stays hands-off.
+-- Position and height belong to the saved Edit Mode layout tested above. The
+-- runtime modules must still stay hands-off instead of fighting that layout.
 eq(chat:GetWidth(), 400, "chat width left alone")
-eq(chat:GetHeight(), 180, "chat height left alone")
+eq(chat:GetHeight(), 180, "chat height not mutated directly")
 local _, _, _, ccx, ccy = chat:GetPoint(1)
-ok(ccx == 10 and ccy == 10, "chat position left alone")
+ok(ccx == 10 and ccy == 10, "chat position not mutated directly")
 
 print("\ndarkmode")
 eq(_G.PlayerFrameTexture._desat, true, "player frame art desaturated")
@@ -1667,8 +1699,11 @@ eq(cvars.xpBarText, "0", "xpBarText restored to its original value when disabled
 eq(healthBar.lockColor, nil, "lockColor handed back to Blizzard when disabled")
 eq(_G.GameTimeFrame:IsShown(), true, "time-of-day dial shown again when disabled")
 eq(_G.PlayerFrameTexture._desat, false, "darkmode restored when disabled")
-eq(_G._statusContainer:GetWidth(), 1024, "status bar width restored when disabled")
-eq(_G._statusContainer.StandaloneFrameTexture2:GetWidth(), 240, "and its border art too")
+eq(_G._statusContainer:GetWidth(), 1024, "status bar width remains Blizzard-owned when disabled")
+eq(_G._statusContainer.StandaloneFrameTexture2:GetWidth(), 240, "and its border art remains untouched")
+eq(_G.StatusTrackingBarManager:GetAlpha(), 1, "stock status bars restored when disabled")
+eq(xpBar:IsShown(), false, "custom XP bar hidden when disabled")
+eq(repBar:IsShown(), false, "custom reputation bar hidden when disabled")
 eq(mainMenuBar:IsShown(), true, "bar art restored when disabled")
 eq(trackingBorder:GetWidth(), 64, "tracking ring handed back to Blizzard when disabled")
 eq(select(1, northTag:GetVertexColor()), 1, "minimap button gold un-tinted when disabled")
@@ -1678,6 +1713,8 @@ eq(chat:GetWidth(), 400, "chat still untouched")
 _G.SlashCmdList["HELLOUI"]("on")
 eq(ns.Config:Get("enabled"), true, "/hui on re-enables")
 eq(_G.ActionButton1.HotKey._alpha, 0, "keybind text hidden again")
+eq(_G.StatusTrackingBarManager:GetAlpha(), 0, "stock status bars suppressed again")
+eq(xpBar:IsShown(), true, "custom XP bar shown again")
 
 print("\nslash commands")
 -- minimapprobe and tracking are in here because both print formatted numbers off
@@ -1796,17 +1833,20 @@ do
         _G._setActiveLayoutIndex(restore)
     end
 
-    -- The panel's dropdown lists them and switching through it works.
-    local entries = _G._openDropdown(_G["HelloUIOptProfile"])
-    eq(#entries, 1, "the dropdown lists every profile")
+    -- The panel's addon-owned selector cycles profiles without touching the
+    -- shared Blizzard dropdown pool.
+    local profileLabel = _G["HelloUIOptProfile"]
+    local profileNext = _G["HelloUIOptProfileNext"]
+    ns.Options:Refresh()
+    eq(profileLabel:GetText(), "Default", "profile selector shows the current profile")
     ns.Config:CopyProfile("Second")
     ns.Config:UseProfile("Default")
-    entries = _G._openDropdown(_G["HelloUIOptProfile"])
-    eq(#entries, 2, "including one just created")
-    for _, info in ipairs(entries) do
-        if info.text == "Second" then info.func() end
-    end
-    eq(ns.Config:ProfileName(), "Second", "and clicking one switches to it")
+    ns.Options:Refresh()
+    profileNext:GetScript("OnClick")()
+    eq(ns.Config:ProfileName(), "Second", "clicking next switches profiles")
+    eq(profileLabel:GetText(), "Second", "profile selector refreshes its label")
+    eq(_G["DropDownList1"], nil, "profile selector creates no shared legacy dropdown")
+    eq(_G._protectedPanelCalls or 0, 0, "profile switching never opens protected panels")
     ns.Config:UseProfile("Default")
     ns.Config:DeleteProfile("Second")
 end
@@ -1890,7 +1930,8 @@ do
     pcb.Border:SetTexture("Interface\\CastingBar\\UI-CastingBar-Border")
     ns:ApplyAll()
     eq(mainMenuBar:IsShown(), false, "bar art still hidden despite a stale false")
-    eq(cvars.xpBarText, "1", "XP text still forced despite a stale false")
+    eq(cvars.xpBarText, "0", "custom bars do not force Blizzard's XP text CVar")
+    ok(_G.HelloUIXPBar:IsShown(), "custom XP bar still runs despite a stale retired setting")
     eq(_G.GameTimeFrame:IsShown(), false, "dial still hidden despite a stale false")
     eq(healthBar.lockColor, true, "health bar still class-coloured despite a stale false")
     eq(pcb.Border:GetTexture(), nil, "cast bar still restyled despite a stale false")
@@ -2057,22 +2098,13 @@ do
     eq(ns.Config:ProfileName(), "Default", "a fresh install starts on Default")
 end
 
--- The remembered xpBarText must live in saved variables, or a /reload makes
--- the addon restore its own value instead of the player's.
-cvars.xpBarText = "0"
-HelloUIDB.xpBarTextOriginal = nil
+-- Upgrade cleanup: older HelloUI builds forced xpBarText and remembered the
+-- player's value. The custom bars restore that value once and retire the state.
+cvars.xpBarText = "1"
+HelloUIDB.xpBarTextOriginal = "0"
 ns:ApplyAll()
-eq(cvars.xpBarText, "1", "xpBarText set")
-eq(HelloUIDB.xpBarTextOriginal, "0", "the player's original is persisted")
--- Simulate a reload: file-locals are gone, saved variables are not.
-ns.Config:Init()
-ns:ApplyAll()
-eq(HelloUIDB.xpBarTextOriginal, "0", "the original survives a reload")
-ns.Config:Set("enabled", false)
-ns:ApplyAll()
-eq(cvars.xpBarText, "0", "disabling restores the player's value, not ours")
-ns.Config:Set("enabled", true)
-ns:ApplyAll()
+eq(cvars.xpBarText, "0", "legacy xpBarText value restored on upgrade")
+eq(HelloUIDB.xpBarTextOriginal, nil, "legacy original cleared after restoration")
 
 -- The time-of-day dial must not be Shown while the minimap itself is hidden.
 _G.Minimap:Hide()

@@ -1,9 +1,11 @@
 # HelloUI
 
-De-clutters the stock World of Warcraft Classic Era interface. No art overhaul,
-no replacement frames, no reimplemented layout engine — 1.15.9 brought Blizzard
-Edit Mode to Era, so every position it does set is written into an Edit Mode
-layout rather than anchored behind the client's back.
+De-clutters the stock World of Warcraft Classic Era interface. No art overhaul
+or reimplemented layout engine — 1.15.9 brought Blizzard Edit Mode to Era, so
+every stock-frame position it sets is written into an Edit Mode layout rather
+than anchored behind the client's back. The exception is a pair of compact,
+addon-owned XP/reputation bars, used specifically to avoid mutating Blizzard's
+taint-sensitive status manager.
 
 Replaces DragonflightUI, which broke on 1.15.9. Its scope came from reading that
 addon's saved profile across 47 characters: AceDB only writes non-default
@@ -25,12 +27,11 @@ text permanently readable. See `DESIGN.md` for the evidence and the reasoning.
 - **Hides the gryphons and the main bar backdrop** — the same two frames
   Blizzard's Edit Mode "Hide Bar Art" drives. The latency strip goes with them,
   as it does under Blizzard's own setting; the micro menu and bags stay.
-- **Narrows the XP/reputation bars** to the width of the action bar stack.
-  They ship 1024px wide and Edit Mode offers only a scale, which squashes the
-  height — so the width is set directly.
-- **Keeps the XP and reputation bar numbers on screen** instead of
-  mouseover-only. This is Blizzard's `xpBarText` setting, and it covers both
-  bars together.
+- **Draws its own XP and watched-reputation bars** at 454×10px, matching the
+  action stack instead of stretching Blizzard's 1024px bars. Values and
+  percentages stay visible, rested XP extends behind the XP fill, and a lone
+  bar compacts into the bottom slot. XP disappears explicitly at the player
+  level cap, even on clients where `UnitXPMax()` remains nonzero there.
 - **Class-colours the player health bar.**
 - **A flat cast bar** — Blizzard's border art off, the spell name on the left and
   a countdown on the right, which the client itself has no region for. And when a
@@ -47,10 +48,13 @@ text permanently readable. See `DESIGN.md` for the evidence and the reasoning.
 - **Hides the minimap's time-of-day dial** (the sun/moon icon — on Classic Era
   it has no click action at all).
 - **Builds DragonflightUI's bar layout** as a real Edit Mode layout named
-  `HelloUI` — bars stacked and centred, 80% icons, 2px padding — and switches to
-  it once, on first login. The layout also covers the cast bar, the chat
-  frame, the micro menu, the bags, the minimap's size and the XP/reputation
-  bars — everything that would otherwise collide with the arrangement. Your own layouts are never touched; switch back in
+  `HelloUI` — full-size bars stacked and centred 6px above the two status rows,
+  with the equally sized stance buttons left-aligned above them — and switches
+  to it once, on first login.
+  The layout also covers the cast bar, the raised 250px-tall chat frame, the
+  micro menu, the bags and the minimap's size — everything that would otherwise
+  collide with the arrangement. The addon-owned XP/reputation bars sit below
+  that layout. Your own layouts are never touched; switch back in
   Edit Mode any time.
 
   Because Edit Mode saves your dragging into the layout itself, **`/hui layout`
@@ -70,8 +74,9 @@ Defaults reproduce the layout that was already in use, so a fresh install should
 look like the thing it replaced rather than a blank slate.
 
 Six of those are simply what the addon is, and have no switch: the gryphons and
-bar backdrop, the XP and reputation text, the time-of-day dial, the class-coloured
-health bar, and both cast bar behaviours. `/hui off` still hands all of them back.
+bar backdrop, the compact XP/reputation bars, the time-of-day dial, the
+class-coloured health bar, and both cast bar behaviours. `/hui off` still hands
+all of them back.
 Everything else in the panel is a checkbox.
 
 ## What it deliberately doesn't do
@@ -84,10 +89,11 @@ HelloUI is the only addon in the family that modifies frames it did not create,
 which makes it the only one that can break the others — so where something else
 already covers a thing, that wins.
 
-It also ships no positioning of any kind. Stock 1.15.9 already anchors the
-minimap flush to the top right, and both `MinimapCluster` and `ChatFrame1` are
-Edit Mode systems that revert whatever an addon sets — Edit Mode even owns the
-chat frame's width and height. Drag and resize them there.
+It does not position frames behind Edit Mode's back. Stock 1.15.9 already
+anchors the minimap flush to the top right, and both `MinimapCluster` and
+`ChatFrame1` are Edit Mode systems that revert direct changes. The HelloUI
+layout therefore carries the chat frame's raised position and 250px height;
+drag and resize it in Edit Mode afterward if you prefer something else.
 
 ## Commands
 

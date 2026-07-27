@@ -29,7 +29,7 @@ local Config = ns.Config
 --
 -- WHERE THE NUMBERS COME FROM. DragonflightUI's own action bar defaults, in
 -- Modules/Actionbar/Actionbar.lua: buttonScale 0.8, padding 2, bar1 above the
--- reputation bar, bars 2 and 3 stacked upward from it, and the two 3-row
+-- status-bar strip, bars 2 and 3 stacked upward from it, and the two 3-row
 -- blocks flanking the stack at +/-64. Edit Mode stores those two scalars
 -- pre-conversion - `display = raw * stepSize + minValue`, from
 -- EditModeSettingDisplayInfo - so 80% icon size is raw 3 (3*10+50) and 2px
@@ -99,6 +99,10 @@ end
 
 -- Raw Edit Mode values, not display values.
 local ICON_SIZE = 5     -- 5 * 10 + 50 = 100%
+-- StanceButtonTemplate inherits SmallActionButtonTemplate, whose native size
+-- is 30px rather than ActionButtonTemplate's 36px. 120% makes the stance
+-- buttons the same 36px size as the action buttons beneath them.
+local STANCE_ICON_SIZE = 7  -- 7 * 10 + 50 = 120%; 30 * 1.2 = 36px
 local ICON_PADDING = 0  -- 0 *  1 +  2 = 2px
 
 local function indices()
@@ -127,17 +131,12 @@ end
 -- than three bars with air between them.
 local BUTTON = 36
 local ROW_STEP = BUTTON + 2   -- 38: same pitch as the gap between buttons
-local BASE_Y = 24             -- bottom row's height above the screen edge
+local BASE_Y = 30             -- leaves 6px above the two custom status bars
+local STACK_LEFT = -(12 * BUTTON + 11 * 2) / 2  -- -227: left edge of the stack
 -- Half the twelve-wide stack (227) plus half a four-wide block (75) plus a
 -- 20px gap.
 local FLANK_X = 322
 local CASTBAR_Y = 245  -- DragonflightUI's own default, above the bars
-
--- Left at 100%. The status bars' "Size" is a SCALE, not a width - Edit Mode
--- does SetScale(value / 100) - so using it to narrow the bar also squashed its
--- height, and the slider floors at 50% anyway, which was still wider than the
--- stack. Width is set directly instead; see StatusBars.lua.
-local STATUS_SIZE = 10
 
 -- Minimap size comes from the config so it can be dropped back to 100% - the
 -- slider is 50..200 in steps of 10 stored pre-conversion, so raw 5 is 100%
@@ -154,24 +153,24 @@ local STATUS_SIZE = 10
 -- route - the same mechanism every other frame here uses - and it stays
 -- editable and draggable afterwards.
 local CHAT_X = 16
-local STATUS_Y = 4     -- the XP/reputation bars, under the stack
+local CHAT_Y = BASE_Y + ROW_STEP * 4 + 12  -- 194: clears the stance row
+local CHAT_HEIGHT = 250
 
 -- Geometry is measured off DragonflightUI's own default screenshot: three
 -- rows of twelve centred and stacked upward, a 4x3 block on each flank, the
--- small stance/pet bar centred above the stack, and the XP/reputation bars
--- directly beneath it rather than wherever Blizzard's manager leaves them.
+-- stance bar left-aligned above the stack, and room directly beneath it for
+-- StatusBars.lua's addon-owned XP/reputation bars.
 --
--- Buttons are at 100%, not the 80% first tried. DragonflightUI's own
+-- Action buttons are at 100%, not the 80% first tried. DragonflightUI's own
 -- buttonScale is 0.8, but that scales ITS buttons; against a 36px template
--- 80% is a 29px icon, which is why they read as small.
+-- 80% is a 29px icon, which is why they read as small. Stance buttons are the
+-- exception only in raw scale: their 30px template needs 120% to reach the
+-- same effective 36px size.
 local function geometry()
     local I = indices()
     if not I then return nil end
 
     local BAR = Enum.EditModeSystem.ActionBar
-    local STATUS = Enum.EditModeSystem.StatusTrackingBar
-    local SI = Enum.EditModeStatusTrackingBarSystemIndices
-
     local g = {
         { system = BAR, index = I.MainBar, rows = 1, scrolling = true,
           point = "BOTTOM", relativeTo = "UIParent", relativePoint = "BOTTOM", x = 0, y = BASE_Y },
@@ -197,13 +196,15 @@ local function geometry()
         { system = BAR, index = I.RightBar2, rows = 3,
           point = "BOTTOM", relativeTo = "UIParent", relativePoint = "BOTTOM", x = -FLANK_X, y = BASE_Y },
 
-        -- Stance and pet are both centred above the stack, which is where the
-        -- screenshot puts that little bar. They therefore share a spot - only
-        -- druids ever show both at once, and they overlapped under
-        -- DragonflightUI too.
-        { system = BAR, index = I.StanceBar, rows = 1,
-          point = "BOTTOM", relativeTo = "UIParent", relativePoint = "BOTTOM", x = 0, y = BASE_Y + ROW_STEP * 3 },
+        -- StanceButtonTemplate is only 30px at 100%, so give this bar its own
+        -- 120% icon size to match the 36px action buttons. Anchoring its left
+        -- edge to the stack's left edge also keeps the visible forms aligned
+        -- when a class has fewer than the ten buttons the frame can hold.
+        { system = BAR, index = I.StanceBar, rows = 1, iconSize = STANCE_ICON_SIZE,
+          point = "BOTTOMLEFT", relativeTo = "UIParent", relativePoint = "BOTTOM",
+          x = STACK_LEFT, y = BASE_Y + ROW_STEP * 3 },
 
+        -- Pet buttons keep their stock size and centred position.
         { system = BAR, index = I.PetActionBar, rows = 1,
           point = "BOTTOM", relativeTo = "UIParent", relativePoint = "BOTTOM", x = 0, y = BASE_Y + ROW_STEP * 3 },
 
@@ -227,9 +228,9 @@ local function geometry()
     -- The chat frame, lifted clear of the bottom-left flank block.
     local CHATSYS = Enum.EditModeSystem.ChatFrame
     if CHATSYS then
-        g[#g + 1] = { system = CHATSYS, index = nil,
+        g[#g + 1] = { system = CHATSYS, index = nil, chatHeight = CHAT_HEIGHT,
             point = "BOTTOMLEFT", relativeTo = "UIParent", relativePoint = "BOTTOMLEFT",
-            x = CHAT_X, y = BASE_Y + ROW_STEP * 3 + 12 }
+            x = CHAT_X, y = CHAT_Y }
     end
 
     -- The minimap, a little larger.
@@ -251,8 +252,8 @@ local function geometry()
     end
 
     -- The micro menu and the bag bar. Both are Edit Mode systems, and left
-    -- at Blizzard's defaults they sit along the bottom centre-right, straight
-    -- on top of the reputation bar once that has been pinned under the stack.
+    -- at Blizzard's defaults they sit along the bottom centre-right, where they
+    -- compete with the custom XP/reputation strip below the action stack.
     -- Parked in the bottom-right corner, bags below the menu.
     local MICRO = Enum.EditModeSystem.MicroMenu
     local BAGS = Enum.EditModeSystem.Bags
@@ -263,20 +264,6 @@ local function geometry()
     if MICRO then
         g[#g + 1] = { system = MICRO, index = nil,
             point = "BOTTOMRIGHT", relativeTo = "UIParent", relativePoint = "BOTTOMRIGHT", x = -4, y = 44 }
-    end
-
-    -- The XP and reputation bars. Blizzard's preset anchors these to
-    -- StatusTrackingBarManager, which leaves them stranded once the main bar
-    -- art they were sitting on is hidden - that is why they ended up between
-    -- the button rows. Pinned under the stack instead. Which container shows
-    -- XP and which shows reputation is priority-driven and not ours to pick;
-    -- these are just the two slots.
-    Layout.statusEnumMissing = not (STATUS and SI)
-    if STATUS and SI then
-        g[#g + 1] = { system = STATUS, index = SI.StatusTrackingBar1, statusSize = STATUS_SIZE,
-            point = "BOTTOM", relativeTo = "UIParent", relativePoint = "BOTTOM", x = 0, y = STATUS_Y }
-        g[#g + 1] = { system = STATUS, index = SI.StatusTrackingBar2, statusSize = STATUS_SIZE,
-            point = "BOTTOM", relativeTo = "UIParent", relativePoint = "BOTTOM", x = 0, y = STATUS_Y + 8 }
     end
 
     return g
@@ -389,7 +376,7 @@ function Layout:Build()
                 setSetting(entry, S.Orientation,
                     (Enum.ActionBarOrientation and Enum.ActionBarOrientation.Horizontal) or 0)
                 setSetting(entry, S.NumRows, def.rows)
-                setSetting(entry, S.IconSize, ICON_SIZE)
+                setSetting(entry, S.IconSize, def.iconSize or ICON_SIZE)
                 setSetting(entry, S.IconPadding, ICON_PADDING)
                 -- Blizzard's preset has AlwaysShowButtons off, which hides
                 -- empty slots - so a mostly-empty bar renders as one or two
@@ -414,8 +401,13 @@ function Layout:Build()
                 setSetting(entry, Enum.EditModeMinimapSetting.Size, def.minimapSize)
             end
 
-            if def.statusSize ~= nil and Enum.EditModeStatusTrackingBarSetting then
-                setSetting(entry, Enum.EditModeStatusTrackingBarSetting.Size, def.statusSize)
+            -- Chat dimensions are stored as two settings per axis because an
+            -- Edit Mode setting value cannot hold the full 120..800 range.
+            -- Keep the preset's width and set only the requested 250px height.
+            if def.chatHeight ~= nil and Enum.EditModeChatFrameSetting then
+                local C = Enum.EditModeChatFrameSetting
+                setSetting(entry, C.HeightHundreds, math.floor(def.chatHeight / 100))
+                setSetting(entry, C.HeightTensAndOnes, def.chatHeight % 100)
             end
 
             if def.lockToPlayer ~= nil and Enum.EditModeCastBarSetting then
@@ -434,16 +426,12 @@ end
 -- Applying
 --------------------------------------------------------------------------
 
--- Saving stores a layout; it does not make Edit Mode re-read and apply it.
--- Opening and immediately closing the manager is what does, and is the same
--- nudge LibEditModeOverride uses.
-local function kickEditMode()
-    local mgr = _G["EditModeManagerFrame"]
-    if ShowUIPanel and HideUIPanel and mgr then
-        pcall(ShowUIPanel, mgr)
-        pcall(HideUIPanel, mgr)
-    end
-end
+-- Do not programmatically open or close EditModeManagerFrame here. Even out of
+-- combat, passing Blizzard's protected panels through ShowUIPanel/HideUIPanel
+-- from addon code can taint the Game Menu's callback path for the session.
+-- SaveLayouts plus SetActiveLayout is the supported boundary. If the client
+-- delays the visual refresh, opening Edit Mode normally applies the saved
+-- layout without making that protected call originate from HelloUI.
 
 local function layoutIndexByName(info, name)
     for i, l in ipairs(info.layouts or {}) do
@@ -579,8 +567,6 @@ function Layout:Apply(silent)
         pcall(C_EditMode.SetActiveLayout, index)
     end
 
-    kickEditMode()
-
     Layout.applied = true
     ns:Print("layout: %s the |cffffd100%s|r Edit Mode layout%s and switched to it",
         created and "created" or "reset", name,
@@ -659,9 +645,7 @@ function Layout:Activate()
     if not index then return false end
     if info.activeLayout == index then return true end
 
-    if not pcall(C_EditMode.SetActiveLayout, index) then return false end
-    kickEditMode()
-    return true
+    return pcall(C_EditMode.SetActiveLayout, index)
 end
 
 --------------------------------------------------------------------------
@@ -744,8 +728,8 @@ local PROBE = {
     { "MainActionBar", "bar1" }, { "MultiBarBottomLeft", "bar2" },
     { "MultiBarBottomRight", "bar3" }, { "MultiBarRight", "bar4" },
     { "MultiBarLeft", "bar5" }, { "StanceBar", "stance" },
-    { "PetActionBar", "pet" }, { "MainStatusTrackingBarContainer", "statusbars" },
-    { "StatusTrackingBarManager", "statusmgr" }, { "MicroMenuContainer", "micromenu" },
+    { "PetActionBar", "pet" }, { "HelloUIXPBar", "xp" },
+    { "HelloUIRepBar", "rep" }, { "MicroMenuContainer", "micromenu" },
     { "BagsBar", "bags" },
 }
 
@@ -754,7 +738,7 @@ function Layout:Probe()
     local h = UIParent and UIParent:GetHeight() or 0
     ns:Print("screen %dx%d |cff808080(left, bottom, width, height - rounded)|r", w, h)
 
-    -- The comparison that matters: does the status bar span the same screen
+    -- The comparison that matters: does the custom XP bar span the same screen
     -- pixels as the main action bar? Reported in screen space, so any scale
     -- difference between the two shows up rather than hiding in the numbers.
     local function span(f)
@@ -763,10 +747,9 @@ function Layout:Probe()
         return f:GetLeft() * sc, f:GetRight() * sc
     end
     local bl, br = span(_G["MainActionBar"])
-    local cs = _G["StatusTrackingBarManager"] and _G["StatusTrackingBarManager"].barContainers
-    local sl, sr = span(cs and cs[1])
+    local sl, sr = span(_G["HelloUIXPBar"])
     if bl and sl then
-        ns:Print("  |cffffd100stack %d..%d   statusbar %d..%d  (overhang L %d, R %d)|r",
+        ns:Print("  |cffffd100stack %d..%d   xpbar %d..%d  (overhang L %d, R %d)|r",
             bl, br, sl, sr, bl - sl, sr - br)
     end
 
@@ -806,9 +789,6 @@ function Layout:Status()
     ns:Print("layout: %s%s",
         index and ("|cffffd100" .. name .. "|r exists at slot " .. index) or ("|cffffd100" .. name .. "|r not created"),
         (index and info.activeLayout == index) and " |cff808080(active)|r" or "")
-    if Layout.statusEnumMissing then
-        ns:Print("  |cffff8080the XP/reputation bar systems are not exposed on this client|r")
-    end
     if Layout.report then
         local r = Layout.report
         ns:Print("  |cff808080positioned %d of %d systems%s|r", r.touched or 0, r.wanted or 0,

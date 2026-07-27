@@ -40,6 +40,13 @@ read_globals = {
     "GameTooltip",
     "UnitClass",
     "UnitName",
+    "UnitLevel",
+    "UnitXP",
+    "UnitXPMax",
+    "GetMaxPlayerLevel",
+    "GetMaxLevelForPlayerExpansion",
+    "GetXPExhaustion",
+    "BreakUpLargeNumbers",
     "GetTrackingTexture",
     "StaticPopup_Show",
     -- Dropdown menu API, as HelloBuffCap's options panel uses it.
@@ -57,11 +64,14 @@ read_globals = {
     "C_CVar",
     "C_EventUtils",
     "C_FriendList",
+    "C_PlayerInfo",
+    "C_Reputation",
 
     -- Legacy fallbacks, only reached when the namespaced form is absent
     "GetCVar",
     "SetCVar",
     "IsAddOnLoaded",
+    "GetWatchedFactionInfo",
 
     -- Settings and Edit Mode
     "Settings",
@@ -78,6 +88,7 @@ read_globals = {
     "CUSTOM_CLASS_COLORS",
     "LOCALIZED_CLASS_NAMES_MALE",
     "LOCALIZED_CLASS_NAMES_FEMALE",
+    "FACTION_BAR_COLORS",
 
     -- Friends list
     "BNGetFriendInfo",
