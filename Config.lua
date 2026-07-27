@@ -95,11 +95,9 @@ local accountDefaults = {
     -- clamp - a deliberate 45 is a legitimate answer to a crowded rim.
     trackingAngle = 19,
 
-    -- Compensates the clock's scale so its text renders at native size and on
-    -- the pixel grid even with the minimap scaled up, and rounds Blizzard's
-    -- half-pixel anchor once that is true. See Minimap.lua - the first attempt
-    -- rounded the anchor alone, which could not work while the subtree was at
-    -- 110%.
+    -- Mirrors the clock text into an addon-owned foreground layer so minimap
+    -- buttons cannot cover it, without changing Blizzard's clock frame inside
+    -- the Edit Mode-managed minimap tree. See Minimap.lua.
     fixClockText = true,
 
     -- Where the clock digits sit inside their box. Blizzard uses 3, 1.5;
@@ -137,8 +135,10 @@ local accountDefaults = {
 
 }
 
--- Per-character, and now it is only ever one thing: which profile this
--- character uses. Everything else lives in the profile.
+-- Per-character preferences contain only which profile this character uses.
+-- Player.lua may also keep `targetOfTargetRepairStage` across ReloadUI so a
+-- retained Classic Era layout entry gets a clearly labelled second prompt.
+-- It records workflow state, never permission for automatic protected work.
 --
 -- This replaces a sparse override list that was explicitly "not a profile
 -- manager, an exception list". The exception list was the right shape for one

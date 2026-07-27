@@ -33,6 +33,11 @@ text permanently readable. See `DESIGN.md` for the evidence and the reasoning.
   bar compacts into the bottom slot. XP disappears explicitly at the player
   level cap, even on clients where `UnitXPMax()` remains nonzero there.
 - **Class-colours the player health bar.**
+- **Detects a detached target-of-target frame** after login and offers a
+  user-confirmed repair. It never changes the protected frame or reloads from a
+  timer. Classic Era can retain the stale saved entry for one reload; when it
+  does, HelloUI presents a labelled second confirmation instead of attempting
+  blocked protected work automatically.
 - **A flat cast bar** — Blizzard's border art off, the spell name on the left and
   a countdown on the right, which the client itself has no region for. And when a
   sibling addon draws its own cast bar (HelloWarrior puts one at the top of its
@@ -45,6 +50,8 @@ text permanently readable. See `DESIGN.md` for the evidence and the reasoning.
 - **Puts the tracking button back on the minimap.** On Classic Era Blizzard
   declares it with no parent at all, so it strands itself in the top-left
   corner of the screen next to your player frame.
+- **Keeps the minimap clock in front of rim icons** without moving it from
+  Blizzard's original position.
 - **Hides the minimap's time-of-day dial** (the sun/moon icon — on Classic Era
   it has no click action at all).
 - **Builds DragonflightUI's bar layout** as a real Edit Mode layout named

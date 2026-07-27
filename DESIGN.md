@@ -201,9 +201,11 @@ DragonflightUI's layout was its default.
   reputation stacks immediately above XP. Their top edge is 24px above the
   screen and the action stack starts at 30px, leaving a 6px separation.
 - **Class-coloured player health bar** — `PlayerFrameHealthBar` recoloured to
-  class. No hook required: `UnitFrameHealthBar_Update` guards its colour write
-  with `if not statusbar.lockColor`, so setting `lockColor` makes Blizzard stop
-  resetting it. This was the *only* unit frame setting in the entire profile.
+  class through a secure post-hook on `UnitFrameHealthBar_Update`. HelloUI does
+  not write the shared `lockColor` field: Blizzard reads it as control flow in
+  the same unit-frame update path that manages `TargetFrameToT`, so tainting it
+  can break target-of-target visibility and positioning. This was the *only*
+  unit frame setting in the entire profile.
 - **Darkmode** — one switch: on desaturates and tints every texture on the
   allowlist `0.4, 0.4, 0.4`, off hands them all back. The old profile's per-area
   picks, its desaturate toggle and its tint colour are gone — nobody was going to
@@ -337,7 +339,7 @@ HelloUI/
 ├── Bars.lua        -- the bar table; native proxy for 2-8, alpha for the
 │                      rest; gryphons and backdrop
 ├── StatusBars.lua  -- addon-owned XP and watched-reputation bars
-├── Player.lua      -- class-coloured player health bar via lockColor
+├── Player.lua      -- player health colour and safe target-of-target warning
 ├── Darkmode.lua    -- desaturate + tint over an explicit allowlist
 ├── Minimap.lua     -- time-of-day dial, the tracking button, the clock
 ├── CastBar.lua     -- yields Blizzard's cast bar to a sibling's, and flattens
@@ -560,10 +562,17 @@ source and an assumption disagreed, the source won.
   that ends in an unconditional `UIParent_ManageFramePositions()`. A permanent
   driver runs that pass five times a second forever.
 - **Player health.** `PlayerFrameHealthBar` is still a named global and
-  `PlayerFrame.HealthBar` also resolves. No hook needed:
-  `UnitFrameHealthBar_Update` guards its colour write with
-  `if not statusbar.lockColor`, on both the connected and disconnected paths, so
-  `lockColor = true` is Blizzard handing the colour over.
+  `PlayerFrame.HealthBar` also resolves. A secure post-hook recolours only that
+  status bar after `UnitFrameHealthBar_Update`; `lockColor` stays untouched so
+  Blizzard's shared unit-frame control flow never reads addon-written state.
+- **Target of target.** Detection is read-only and requires two bad samples
+  three seconds apart. Repairing `TargetFrameToT` and calling `C_UI.Reload()`
+  are protected operations: they run only directly from a StaticPopup button's
+  hardware click, never from a timer, `PLAYER_REGEN_ENABLED`, `ns:WhenSafe` or
+  another post-reload continuation. Classic Era can retain its layout-local
+  entry once, so a persisted stage changes the second dialog to an explicit
+  “Finish repair” confirmation. That second click is intentional; removing it
+  caused `ADDON_ACTION_BLOCKED` for both `Reload()` and `CancelLogout`.
 - **Status tracking.** Keep `StatusTrackingBarManager` alive but transparent,
   and render XP/reputation in addon-owned frames. Never resize its containers,
   hook `UpdateBarVisuals`, call manager refresh methods, or modify its Edit Mode

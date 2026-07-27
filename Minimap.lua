@@ -404,63 +404,88 @@ end
 --------------------------------------------------------------------------
 -- The clock
 --
--- Two things are wrong with it, and the first attempt only addressed the
--- smaller one.
+-- Minimap icons can cover Blizzard's ticker because they draw later. Raising
+-- TimeManagerClockButton itself fixes that visually, but it also writes addon
+-- state into a Blizzard frame inside the Edit Mode-managed minimap tree. That
+-- is exactly the kind of taint that can surface later in the Game Menu.
 --
--- THE SCALE is the real cause. Making the minimap 110% scales the whole
--- subtree, clock included, so its digits are drawn at a non-integer scale and
--- render soft. Rounding the anchor cannot help while that is true - at 1.1,
--- an offset of 2 lands at 2.2 screen pixels. So the button's own scale is
--- compensated to bring its EFFECTIVE scale back to UIParent's, which renders
--- the text at native size and on the grid. The clock stays its original size
--- while the map around it is bigger, which is the point.
---
--- THE HALF PIXEL is Blizzard's: the ticker is anchored CENTER at x=3, y=1.5.
--- Once the effective scale is 1 that rounding is finally meaningful, so it is
--- done here too - and only the y, because the x=3 centres the digits inside
--- dial art that is not symmetric.
+-- The safe boundary is an addon-owned foreground FontString. It mirrors the
+-- ticker at native UI scale and HIGH strata while leaving Blizzard's clock
+-- frame, scale, level and anchors untouched. Only the stock ticker's alpha is
+-- suppressed, which cannot feed geometry back into MinimapCluster.
 --
 -- Blizzard_TimeManager is LoadOnDemand, so the frame may not exist yet; this
 -- re-applies if the addon loads later, and on the events that change scales.
 --------------------------------------------------------------------------
 
+local clockOverlay
+local tickerAlpha
+
+local function syncClockOverlay()
+    local ticker = clockOverlay and clockOverlay.source
+    local text = ticker and ticker.GetText and ticker:GetText()
+    if clockOverlay and clockOverlay.text and text ~= nil then
+        clockOverlay.text:SetText(text)
+    end
+    if clockOverlay then
+        local button = clockOverlay.button
+        local map = _G["Minimap"]
+        local visible = (not map or map:IsShown())
+            and (not button or not button.IsShown or button:IsShown())
+        clockOverlay:SetAlpha(visible and 1 or 0)
+    end
+end
+
+local function ensureClockOverlay(button, ticker)
+    if not clockOverlay then
+        local frame = CreateFrame("Frame", "HelloUIClockOverlay", UIParent)
+        frame:SetSize(1, 1)
+        frame:SetFrameStrata("HIGH")
+        frame:SetFrameLevel(100)
+        frame:EnableMouse(false)
+
+        local text = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        text:SetPoint("CENTER", frame, "CENTER", 0, 0)
+        local fontObject = ticker.GetFontObject and ticker:GetFontObject()
+        if fontObject and text.SetFontObject then text:SetFontObject(fontObject) end
+
+        frame.text = text
+        frame:SetScript("OnUpdate", function(self, elapsed)
+            self.HelloUIElapsed = (self.HelloUIElapsed or 0) + elapsed
+            if self.HelloUIElapsed < 0.2 then return end
+            self.HelloUIElapsed = 0
+            syncClockOverlay()
+        end)
+        clockOverlay = frame
+    end
+
+    clockOverlay.source = ticker
+    clockOverlay.button = button
+    clockOverlay:ClearAllPoints()
+    clockOverlay:SetPoint("CENTER", button, "CENTER",
+        Config:Get("clockTextX") or 3, Config:Get("clockTextY") or 2)
+    clockOverlay:Show()
+    syncClockOverlay()
+end
+
 local function applyClock()
     local button = _G["TimeManagerClockButton"]
     local ticker = _G["TimeManagerClockTicker"]
-    if not (button and ticker and button.SetScale) then return end
+    if not (button and ticker) then return end
 
     if not Config:Enabled("fixClockText") then
-        if button.HelloUIScaled then
-            button:SetScale(1)
-            button.HelloUIScaled = nil
-        end
+        if tickerAlpha ~= nil and ticker.SetAlpha then ticker:SetAlpha(tickerAlpha) end
+        tickerAlpha = nil
+        if clockOverlay then clockOverlay:Hide() end
+        Minimap_.clockFixed = nil
         return
     end
 
-    -- Cancel out whatever scale the minimap subtree is under, so the clock
-    -- draws at the same scale as the rest of the UI.
-    local parent = button.GetParent and button:GetParent()
-    local ui = UIParent and UIParent.GetEffectiveScale and UIParent:GetEffectiveScale() or 1
-    if parent and parent.GetEffectiveScale then
-        local own = button:GetEffectiveScale() or 1
-        local cur = button:GetScale() or 1
-        local parentScale = (own > 0 and cur > 0) and (own / cur) or 1
-        if parentScale > 0 then
-            button:SetScale(ui / parentScale)
-            button.HelloUIScaled = true
-        end
-    end
+    if tickerAlpha == nil and ticker.GetAlpha then tickerAlpha = ticker:GetAlpha() end
+    if ticker.SetAlpha then ticker:SetAlpha(0) end
+    ensureClockOverlay(button, ticker)
 
-    -- Blizzard's x=3 is an attempt at optically centring the digits inside
-    -- box art that is not symmetric - its own HitRectInsets are 8 left, 5
-    -- right - and whether 3 is the right number is not something the source
-    -- can settle. So the offset is a setting, nudgeable live with
-    -- `/hui clock <x> <y>`, defaulting to Blizzard's own rounded to the grid.
-    ticker:ClearAllPoints()
-    ticker:SetPoint("CENTER", button, "CENTER",
-        Config:Get("clockTextX") or 3, Config:Get("clockTextY") or 2)
-
-    Minimap_.clockFixed = ("scale %.3f, text %d,%d"):format(button:GetScale() or 1,
+    Minimap_.clockFixed = ("addon overlay, text %d,%d"):format(
         Config:Get("clockTextX") or 3, Config:Get("clockTextY") or 2)
 end
 
@@ -479,6 +504,7 @@ function Minimap_:Init()
     if type(_G["ToggleMinimap"]) == "function" then
         hooksecurefunc("ToggleMinimap", function()
             applyTimeOfDay()
+            applyClock()
         end)
         Minimap_.hookedToggle = true
     end
@@ -493,8 +519,7 @@ function Minimap_:Init()
         end
     end)
 
-    -- The compensating scale depends on the minimap's, which changes with the
-    -- UI scale and the resolution.
+    -- Refresh the overlay after changes that can move or scale its anchor.
     -- Keep in step with Blizzard's own handler when tracking changes.
     ns:On("MINIMAP_UPDATE_TRACKING", function()
         local f = trackingFrame()

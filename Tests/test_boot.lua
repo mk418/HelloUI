@@ -43,10 +43,10 @@ local Frame = {}
 -- `if frame.SomeField then` true for fields that do not exist - and that
 -- pattern is load-bearing throughout the addon.
 local NOOP_METHODS = {
-    "SetFrameStrata", "SetFrameLevel", "SetJustifyV", "SetSpacing", "SetValueStep",
+    "SetJustifyV", "SetSpacing", "SetValueStep",
     "SetObeyStepOnDrag", "SetOwner", "AddLine", "SetTexCoord", "SetDrawLayer",
     "RegisterForClicks", "RegisterForDrag", "SetMovable", "SetClampedToScreen",
-    "SetUserPlaced", "SetToplevel", "SetFont", "GetFont",
+    "SetToplevel", "SetFont", "GetFont",
     "SetNormalTexture", "SetHighlightTexture", "SetPushedTexture",
     "SetAttribute", "SetID", "GetID", "Raise", "Lower",
     "SetHitRectInsets", "SetIgnoreParentAlpha", "SetPropagateMouseClicks",
@@ -83,6 +83,8 @@ function Frame.new(name, parent)
     f._name = name
     f._parent = parent
     f._alpha = 1
+    f._strata = "MEDIUM"
+    f._level = 0
     f._shown = true
     f._mouse = true
     f._points = {}
@@ -108,6 +110,14 @@ function Frame:SetStatusBarTexture(texture) self._statusTexture = texture end
 
 function Frame:GetName() return self._name end
 function Frame:GetParent() return self._parent end
+function Frame:SetUserPlaced(v) self._userPlaced = v and true or false end
+function Frame:IsUserPlaced() return self._userPlaced and true or false end
+function Frame:SetDontSavePosition(v) self._dontSavePosition = v and true or false end
+function Frame:GetDontSavePosition() return self._dontSavePosition and true or false end
+function Frame:SetFrameStrata(strata) self._strata = strata end
+function Frame:GetFrameStrata() return self._strata end
+function Frame:SetFrameLevel(level) self._level = level end
+function Frame:GetFrameLevel() return self._level end
 function Frame:SetAlpha(a) self._alpha = a end
 function Frame:GetAlpha() return self._alpha end
 function Frame:Show() self._shown = true end
@@ -315,12 +325,26 @@ _G.FACTION_BAR_COLORS = {
 _G.StaticPopupDialogs = {}
 _G._shownPopup = nil
 _G.StaticPopup_Show = function(which) _G._shownPopup = which end
+_G._reloads = 0
+_G.ReloadUI = function() _G._reloads = _G._reloads + 1 end
+
+local timers = {}
+_G.C_Timer = {
+    After = function(_, fn) timers[#timers + 1] = fn end,
+}
+local function runTimers()
+    local pending = timers
+    timers = {}
+    for i = 1, #pending do pending[i]() end
+end
 
 _G.RAID_CLASS_COLORS = { WARRIOR = { r = 0.78, g = 0.61, b = 0.43 }, MAGE = { r = 0.41, g = 0.8, b = 0.94 } }
 _G.LOCALIZED_CLASS_NAMES_MALE = { WARRIOR = "Warrior", MAGE = "Mage" }
 _G.LOCALIZED_CLASS_NAMES_FEMALE = { WARRIOR = "Warrior", MAGE = "Mage" }
 
-_G.UnitFrameHealthBar_Update = function() end
+_G.UnitFrameHealthBar_Update = function(bar)
+    bar:SetStatusBarColor(0, 1, 0, 1)
+end
 _G.CopyTable = function(t)
     if type(t) ~= "table" then return t end
     local out = {}
@@ -464,6 +488,9 @@ end
 _G._savedLayouts = function() return savedLayouts end
 _G.ToggleMinimap = function()
     -- Real behaviour: hides the map and the dial, then shows both again.
+    if _G.Minimap then
+        if _G.Minimap:IsShown() then _G.Minimap:Hide() else _G.Minimap:Show() end
+    end
     if _G.GameTimeFrame then _G.GameTimeFrame:Show() end
 end
 
@@ -543,6 +570,9 @@ end
 local playerFrame = Frame.new("PlayerFrame", _G.UIParent)
 local healthBar = makeStatusBar("PlayerFrameHealthBar", playerFrame)
 playerFrame.HealthBar = healthBar
+local targetFrame = Frame.new("TargetFrame", _G.UIParent)
+local targetOfTarget = Frame.new("TargetFrameToT", targetFrame)
+targetOfTarget:SetPoint("BOTTOMRIGHT", targetFrame, "BOTTOMRIGHT", -16, -14)
 
 -- Minimap
 local cluster = Frame.new("MinimapCluster", _G.UIParent)
@@ -655,7 +685,10 @@ _G.GetTrackingTexture = function() return 135725 end
 minimap:SetScale(1.1)
 local clockBtn = Frame.new("TimeManagerClockButton", backdrop)
 local clockText = Frame.new("TimeManagerClockTicker", clockBtn)
+clockBtn:SetFrameStrata("LOW")
+clockBtn:SetFrameLevel(3)
 clockText:SetPoint("CENTER", clockBtn, "CENTER", 3, 1.5)
+clockText:SetText("12:34")
 
 -- Action bar art + cast bars
 local mainMenuBar = Frame.new("MainMenuBar", _G.UIParent)
@@ -762,15 +795,17 @@ do
     if not toc then
         ok(false, "HelloUI.toc readable")
     else
-        local listed = {}
+        local listed, tocVersion = {}, nil
         for _, f in ipairs(FILES) do listed[f] = true end
         for line in toc:lines() do
             local file = line:match("^%s*([%w_]+%.lua)%s*$")
             if file and not listed[file] then missing[#missing + 1] = file end
+            tocVersion = tocVersion or line:match("^## Version:%s*(%S+)")
         end
         toc:close()
         ok(#missing == 0, ("every file in the TOC is loaded by the harness%s"):format(
             #missing > 0 and (" - missing " .. table.concat(missing, ", ")) or ""))
+        eq(ns.VERSION, tocVersion, "runtime version matches the TOC release version")
     end
 end
 
@@ -787,12 +822,15 @@ local function fire(event, ...)
     for i = 1, #handlers do handlers[i](...) end
 end
 
+_G.HelloUICharDB = {}
 fire("ADDON_LOADED", "HelloUI")
 ok(_G.HelloUIDB ~= nil, "saved variables created")
 eq(ns.Config:Get("enabled"), true, "enabled by default")
 
 fire("PLAYER_LOGIN")
 fire("PLAYER_ENTERING_WORLD")
+runTimers()
+local loginPopup = _G._shownPopup
 
 ----------------------------------------------------------------------
 -- Assertions: the guarded event registration
@@ -924,22 +962,111 @@ do
 end
 
 print("\nplayer")
-eq(healthBar.lockColor, true, "lockColor set so Blizzard stops resetting the colour")
+eq(healthBar.lockColor, nil, "player bar control-flow fields remain Blizzard-owned")
 local r, g, b = healthBar:GetStatusBarColor()
 eq(r, 0.78, "health bar red channel is the warrior class colour")
 eq(g, 0.61, "health bar green channel is the warrior class colour")
 eq(b, 0.43, "health bar blue channel is the warrior class colour")
+_G.UnitFrameHealthBar_Update(healthBar, "player")
+r, g, b = healthBar:GetStatusBarColor()
+eq(r, 0.78, "secure post-hook restores the class colour after Blizzard updates")
+eq(g, 0.61, "post-hook runs after Blizzard's green reset")
+eq(b, 0.43, "post-hook restores the class colour's blue channel")
+eq(healthBar.lockColor, nil, "post-hook does not taint lockColor")
+eq(ns.Player.RepairTargetOfTarget, nil, "protected repair is not exposed to automatic callers")
+ok(_G.StaticPopupDialogs["HELLOUI_FIX_TARGET_OF_TARGET"] ~= nil,
+    "detached target-of-target has a user-confirmed repair dialog")
+
+print("\ntarget of target")
+do
+    ok(not ns.Player:TargetOfTargetNeedsRepair(), "Blizzard's normal child anchor passes detection")
+    eq(_G._reloads, 0, "correct target-of-target causes no reload")
+
+    -- Reproduce the saved screen-relative anchor from the live client.
+    targetOfTarget:SetUserPlaced(true)
+    targetOfTarget:ClearAllPoints()
+    targetOfTarget:SetPoint("RIGHT", nil, "RIGHT", -133, -167)
+    ns.Player.checkedTargetOfTargetThisSession = false
+    ns.Player.askedTargetOfTargetThisSession = false
+    _G._shownPopup = nil
+    ns.Player:ScheduleTargetOfTargetCheck()
+    runTimers()
+    eq(_G._shownPopup, nil, "first bad sample does not prompt during frame restoration")
+    runTimers()
+    eq(_G._shownPopup, "HELLOUI_FIX_TARGET_OF_TARGET", "persistent detachment offers correction")
+    eq(_G._reloads, 0, "read-only detection never reloads automatically")
+
+    _G.StaticPopupDialogs["HELLOUI_FIX_TARGET_OF_TARGET"].OnAccept()
+    eq(targetOfTarget:IsUserPlaced(), false, "button-confirmed repair clears manual placement")
+    eq(targetOfTarget:GetDontSavePosition(), true, "button-confirmed repair omits the stale record")
+    eq(_G.HelloUICharDB.targetOfTargetRepairStage, 1, "first pass is remembered across reload")
+    eq(_G._reloads, 1, "hardware-click repair reloads immediately")
+
+    -- Classic can restore the absolute entry once. It must only offer the
+    -- labelled continuation: no protected mutation and no ReloadUI from the
+    -- delayed login check.
+    targetOfTarget:SetDontSavePosition(false)
+    targetOfTarget:SetUserPlaced(true)
+    targetOfTarget:ClearAllPoints()
+    targetOfTarget:SetPoint("TOPLEFT", nil, "TOPLEFT", 355, -69)
+    ns.Player.checkedTargetOfTargetThisSession = false
+    ns.Player.askedTargetOfTargetThisSession = false
+    _G._shownPopup = nil
+    ns.Player:MaybeAskTargetOfTarget()
+    eq(_G._shownPopup, "HELLOUI_FINISH_TARGET_OF_TARGET", "retained entry offers a labelled finish step")
+    eq(targetOfTarget:IsUserPlaced(), true, "finish offer does not touch the protected frame")
+    eq(_G._reloads, 1, "finish offer does not attempt a blocked automatic reload")
+
+    _G.StaticPopupDialogs["HELLOUI_FINISH_TARGET_OF_TARGET"].OnAccept()
+    eq(targetOfTarget:IsUserPlaced(), false, "finish button performs the second cleanup")
+    eq(_G.HelloUICharDB.targetOfTargetRepairStage, 2, "finish button records the bounded second pass")
+    eq(_G._reloads, 2, "finish button reloads from its hardware click")
+
+    targetOfTarget:SetDontSavePosition(false)
+    targetOfTarget:SetUserPlaced(false)
+    targetOfTarget:ClearAllPoints()
+    targetOfTarget:SetPoint("BOTTOMRIGHT", targetFrame, "BOTTOMRIGHT", -16, -13.999999046326)
+    ns.Player.checkedTargetOfTargetThisSession = false
+    ns.Player.askedTargetOfTargetThisSession = false
+    ns.Player:MaybeAskTargetOfTarget()
+    eq(_G.HelloUICharDB.targetOfTargetRepairStage, nil, "successful repair retires workflow state")
+
+    -- If combat starts while the dialog is open, the click is not queued: a
+    -- later event would lack hardware authority. Leaving combat only re-offers
+    -- the dialog, and still performs no protected work by itself.
+    targetOfTarget:SetUserPlaced(true)
+    targetOfTarget:ClearAllPoints()
+    targetOfTarget:SetPoint("RIGHT", nil, "RIGHT", -133, -167)
+    inCombat = true
+    _G.StaticPopupDialogs["HELLOUI_FIX_TARGET_OF_TARGET"].OnAccept()
+    eq(targetOfTarget:IsUserPlaced(), true, "combat click does not queue protected repair")
+    eq(_G._reloads, 2, "combat click does not queue ReloadUI")
+    inCombat = false
+    _G._shownPopup = nil
+    fire("PLAYER_REGEN_ENABLED")
+    eq(_G._shownPopup, "HELLOUI_FIX_TARGET_OF_TARGET", "repair is re-offered after combat")
+    eq(targetOfTarget:IsUserPlaced(), true, "regen handler remains read-only")
+    eq(_G._reloads, 2, "regen handler never calls ReloadUI")
+
+    -- Restore the harness without exercising another protected click.
+    targetOfTarget:SetUserPlaced(false)
+    targetOfTarget:ClearAllPoints()
+    targetOfTarget:SetPoint("BOTTOMRIGHT", targetFrame, "BOTTOMRIGHT", -16, -14)
+end
 
 print("\nminimap")
 eq(_G.GameTimeFrame:IsShown(), false, "time-of-day dial hidden")
 _G.ToggleMinimap()
 eq(_G.GameTimeFrame:IsShown(), false, "still hidden after ToggleMinimap re-shows it")
+eq(_G.HelloUIClockOverlay:GetAlpha(), 0, "clock overlay follows the hidden minimap")
+_G.ToggleMinimap()
+eq(_G.HelloUIClockOverlay:GetAlpha(), 1, "clock overlay returns with the minimap")
 
 print("\nlayout")
 -- Nothing is applied behind the player's back: login raises a prompt and
 -- otherwise leaves Edit Mode alone.
 eq(#_G._savedLayouts(), 0, "login does not silently write a layout")
-eq(_G._shownPopup, "HELLOUI_USE_LAYOUT", "login asks instead")
+eq(loginPopup, "HELLOUI_USE_LAYOUT", "login asks instead")
 
 _G.StaticPopupDialogs["HELLOUI_USE_LAYOUT"].OnAccept()
 eq(#_G._savedLayouts(), 1, "accepting creates the layout")
@@ -1445,32 +1572,46 @@ do
     ns.Minimap:Apply()
     eq(tracking:IsShown(), true, "and back when tracking resumes")
 
-    -- The clock sits in a subtree scaled to 110%. Compensating its own scale
-    -- brings the EFFECTIVE scale back to 1, so the digits render at native
-    -- size on the pixel grid - which rounding the anchor alone could not do.
-    ok(math.abs(clockBtn:GetEffectiveScale() - 1) < 0.001,
-        ("clock renders at native scale (effective %.3f)"):format(clockBtn:GetEffectiveScale()))
-    ok(clockBtn:GetScale() < 1, "by scaling the button down against the minimap")
-
-    -- And only now is rounding the half-pixel anchor meaningful.
+    -- The Blizzard frame stays byte-for-byte in its own draw order and scale;
+    -- an addon-owned text layer is what comes to the front.
+    eq(clockBtn:GetScale(), 1, "Blizzard clock scale remains untouched")
+    eq(clockBtn:GetFrameStrata(), "LOW", "Blizzard clock strata remains untouched")
+    eq(clockBtn:GetFrameLevel(), 3, "Blizzard clock frame level remains untouched")
     local _, _, _, cx, cy = clockText:GetPoint(1)
-    eq(cx, 1, "clock text at the offset dialled in live")
-    eq(cy, -1, "both whole pixels, and neither is Blizzard's guess")
+    eq(cx, 3, "Blizzard ticker x anchor remains untouched")
+    eq(cy, 1.5, "Blizzard ticker half-pixel y anchor remains untouched")
+    eq(clockText:GetAlpha(), 0, "stock ticker hidden without changing its geometry")
+
+    local clockFront = _G.HelloUIClockOverlay
+    eq(clockFront:GetFrameStrata(), "HIGH", "addon clock overlay draws above minimap icons")
+    eq(clockFront:GetFrameLevel(), 100, "addon overlay has a high level in its own strata")
+    eq(clockFront.text:GetText(), "12:34", "addon overlay mirrors Blizzard's time")
+    local cp, cr, crp, ox, oy = clockFront:GetPoint(1)
+    eq(cp, "CENTER", "clock overlay uses its centre anchor")
+    eq(cr, clockBtn, "clock overlay follows Blizzard's clock position")
+    eq(crp, "CENTER", "clock overlay stays centred on Blizzard's clock")
+    eq(ox, 1, "clock overlay uses the configured horizontal offset")
+    eq(oy, -1, "clock overlay uses the configured vertical offset")
 
     -- The offset is nudgeable, since the right optical value cannot be read
     -- off a screenshot.
     ns.Minimap:NudgeClock(1, 0)
-    local _, _, _, nx, ny = clockText:GetPoint(1)
+    local _, _, _, nx, ny = clockFront:GetPoint(1)
     eq(nx, 1, "clock x nudged")
     eq(ny, 0, "clock y nudged")
     ns.Minimap:NudgeClock(1, -1)
 
-    -- Switching it off hands the scale back.
+    -- Switching it off restores the stock text and removes the overlay while
+    -- the Blizzard frame remains untouched throughout.
     ns.Config:Set("fixClockText", false)
     ns.Minimap:Apply()
-    eq(clockBtn:GetScale(), 1, "scale restored when disabled")
+    eq(clockText:GetAlpha(), 1, "stock ticker restored when disabled")
+    eq(clockFront:IsShown(), false, "addon clock overlay hidden when disabled")
+    eq(clockBtn:GetFrameStrata(), "LOW", "stock clock draw order still untouched")
     ns.Config:Set("fixClockText", true)
     ns.Minimap:Apply()
+    eq(clockText:GetAlpha(), 0, "stock ticker suppressed again when re-enabled")
+    eq(clockFront:IsShown(), true, "addon clock overlay shown again")
 end
 
 print("\ncast bar style")
@@ -1696,7 +1837,8 @@ _G.SlashCmdList["HELLOUI"]("off")
 eq(ns.Config:Get("enabled"), false, "/hui off disables")
 eq(_G.ActionButton1.HotKey._alpha, 1, "keybind text restored when disabled")
 eq(cvars.xpBarText, "0", "xpBarText restored to its original value when disabled")
-eq(healthBar.lockColor, nil, "lockColor handed back to Blizzard when disabled")
+eq(select(2, healthBar:GetStatusBarColor()), 1, "player health colour handed back when disabled")
+eq(healthBar.lockColor, nil, "player health control-flow fields remain untouched")
 eq(_G.GameTimeFrame:IsShown(), true, "time-of-day dial shown again when disabled")
 eq(_G.PlayerFrameTexture._desat, false, "darkmode restored when disabled")
 eq(_G._statusContainer:GetWidth(), 1024, "status bar width remains Blizzard-owned when disabled")
@@ -1864,6 +2006,7 @@ print("\nregressions")
 -- The hooks the addon claims to install are actually installed.
 ok(hooks["ToggleMinimap"], "ToggleMinimap hooked (re-hides the dial after a toggle)")
 ok(hooks["Show"], "GameTimeFrame:Show hooked (catches other addons showing it)")
+ok(hooks["UnitFrameHealthBar_Update"], "player colour uses a secure post-hook")
 
 -- barsOff is authoritative now: a bar absent from it is shown, even if the
 -- player's own Blizzard setting had it hidden. That reversal is only
@@ -1926,14 +2069,16 @@ do
     mainMenuBar:SetShown(true)
     cvars.xpBarText = "0"
     _G.GameTimeFrame:Show()
-    healthBar.lockColor = nil
+    healthBar:SetStatusBarColor(0, 1, 0, 1)
     pcb.Border:SetTexture("Interface\\CastingBar\\UI-CastingBar-Border")
     ns:ApplyAll()
     eq(mainMenuBar:IsShown(), false, "bar art still hidden despite a stale false")
     eq(cvars.xpBarText, "0", "custom bars do not force Blizzard's XP text CVar")
     ok(_G.HelloUIXPBar:IsShown(), "custom XP bar still runs despite a stale retired setting")
     eq(_G.GameTimeFrame:IsShown(), false, "dial still hidden despite a stale false")
-    eq(healthBar.lockColor, true, "health bar still class-coloured despite a stale false")
+    eq(select(1, healthBar:GetStatusBarColor()), 0.78,
+        "health bar still class-coloured despite a stale false")
+    eq(healthBar.lockColor, nil, "class colour never writes the shared lockColor flag")
     eq(pcb.Border:GetTexture(), nil, "cast bar still restyled despite a stale false")
     eq(select(1, northTag:GetVertexColor()), 0.4,
         "darkmode still covers every area despite stale per-area falses")
