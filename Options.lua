@@ -299,7 +299,6 @@ profileNext:SetScript("OnClick", function() stepProfile(1) end)
 
 -- Naming a new profile needs a text box, and StaticPopup is the only one of
 -- those that does not mean building a dialog frame from scratch.
-StaticPopupDialogs = StaticPopupDialogs or {}
 StaticPopupDialogs["HELLOUI_NEW_PROFILE"] = {
     text = "Name for the new profile\n\n|cff808080It starts as a copy of the one you are on, "
         .. "and this character switches to it.|r",

@@ -108,7 +108,11 @@ local function repairTargetOfTarget(stage)
     return true
 end
 
-StaticPopupDialogs = StaticPopupDialogs or {}
+-- StaticPopupDialogs already exists before ordinary addons load. Do not assign
+-- the global itself here, even back to the same table: Blizzard reads that
+-- binding while constructing the Game Menu and dispatching the QUIT dialog,
+-- so an addon-owned assignment can taint both Quit() and ForceQuit(). Adding
+-- an addon-specific key is the supported, key-local use of the registry.
 StaticPopupDialogs["HELLOUI_FIX_TARGET_OF_TARGET"] = {
     text = "The target-of-target frame has a saved position that no longer attaches it to the target frame.\n\n"
         .. "|cff808080HelloUI can restore Blizzard's normal attachment. Classic Era may retain the stale entry "

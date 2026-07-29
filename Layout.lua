@@ -677,7 +677,6 @@ function Layout:FollowProfile(wasActive)
     return Layout:Apply(true)
 end
 
-StaticPopupDialogs = StaticPopupDialogs or {}
 StaticPopupDialogs["HELLOUI_USE_LAYOUT"] = {
     text = "Use the HelloUI bar layout?\n\n|cff808080Bars stacked and centred, the way DragonflightUI "
         .. "had them. This adds an Edit Mode layout and switches to it - your own layouts are not "

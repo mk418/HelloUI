@@ -635,8 +635,11 @@ source and an assumption disagreed, the source won.
   `C_EditMode.SaveLayouts` / `C_EditMode.SetActiveLayout`; never synthesize a
   `ShowUIPanel` / `HideUIPanel` Edit Mode refresh from addon code. The profile
   selector uses addon-owned buttons instead of `UIDropDownMenuTemplate`, so it
-  never writes into the shared `DropDownList1` pool. Both older mechanisms can
-  propagate addon taint into GameMenuFrame's protected callbacks.
+  never writes into the shared `DropDownList1` pool. Popup definitions add only
+  `HELLOUI_*` keys to `StaticPopupDialogs`; they never reassign that Blizzard-
+  owned global binding, which the Game Menu and QUIT dispatcher both read on
+  their protected callback paths. Each of those older mechanisms can propagate
+  addon taint into GameMenuFrame's protected callbacks.
 
 ---
 

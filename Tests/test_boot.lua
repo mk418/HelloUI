@@ -807,6 +807,29 @@ do
             #missing > 0 and (" - missing " .. table.concat(missing, ", ")) or ""))
         eq(ns.VERSION, tocVersion, "runtime version matches the TOC release version")
     end
+
+    -- StaticPopupDialogs is a Blizzard-owned global used by both
+    -- GameMenuFrame:InitButtons and StaticPopup_OnClick. Reassigning the
+    -- binding from addon code (even to the existing table) can taint the
+    -- protected Quit/ForceQuit path. HelloUI may add its own keyed dialog
+    -- definitions, but must never write the global itself.
+    local popupGlobalWriters = {}
+    for _, file in ipairs(FILES) do
+        local source = io.open(file)
+        if source then
+            local lineNumber = 0
+            for line in source:lines() do
+                lineNumber = lineNumber + 1
+                if line:match("^%s*StaticPopupDialogs%s*=") then
+                    popupGlobalWriters[#popupGlobalWriters + 1] = file .. ":" .. lineNumber
+                end
+            end
+            source:close()
+        end
+    end
+    ok(#popupGlobalWriters == 0,
+        ("StaticPopupDialogs binding remains Blizzard-owned%s"):format(
+            #popupGlobalWriters > 0 and (" - " .. table.concat(popupGlobalWriters, ", ")) or ""))
 end
 
 ok(ns.Config ~= nil, "Config module loaded")
