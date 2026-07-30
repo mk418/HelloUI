@@ -43,6 +43,12 @@ text permanently readable. See `DESIGN.md` for the evidence and the reasoning.
   sibling addon draws its own cast bar (HelloWarrior puts one at the top of its
   cluster, in the same strip), Blizzard's is switched off through the client's own
   setting for exactly that case, so the two never draw through each other.
+- **A matching flat breath meter** — the same borderless 195×13 shape, label on
+  the left, and tenths-of-a-second countdown on the right. It restyles all three
+  interchangeable Blizzard mirror-timer slots, so breath still gets the look when
+  fatigue or another timer is already active. Blizzard continues to own the timing,
+  fill texture, and type colours. The stack uses HelloUI's lower top-centre
+  position so it stays below the top button cluster.
 - **Darkmode** — one switch. Desaturates and tints Blizzard's own frame art:
   unit frames, the minimap and its buttons, the action bar backdrop and the cast
   bars. Never a sibling addon's icons, and never anything that uses desaturation
@@ -80,10 +86,10 @@ text permanently readable. See `DESIGN.md` for the evidence and the reasoning.
 Defaults reproduce the layout that was already in use, so a fresh install should
 look like the thing it replaced rather than a blank slate.
 
-Six of those are simply what the addon is, and have no switch: the gryphons and
+Seven of those are simply what the addon is, and have no switch: the gryphons and
 bar backdrop, the compact XP/reputation bars, the time-of-day dial, the
-class-coloured health bar, and both cast bar behaviours. `/hui off` still hands
-all of them back.
+class-coloured health bar, both cast bar behaviours, and the matching breath
+meter. `/hui off` still hands all of them back.
 Everything else in the panel is a checkbox.
 
 ## What it deliberately doesn't do

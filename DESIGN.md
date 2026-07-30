@@ -76,15 +76,15 @@ ships in the client.
 
 ## Current scope
 
-Ten features. Four are switches; the other six are simply what the addon does
+Eleven features. Four are switches; the other seven are simply what the addon does
 — hiding the gryphons and bar backdrop, compact XP and reputation bars,
 hiding the time-of-day dial, class-colouring the player health bar, yielding the
-cast bar to a sibling that draws its own, and the flat cast bar. Those started as
-settings because everything did, and a switch implies a decision worth making:
-nobody installs this and then turns the de-clutter off. They run whenever the
-addon is enabled, `/hui off` still hands every one of them back, and their keys
-are deleted from saved variables on sight so a stale `false` cannot read as a
-setting that broke. Three changes from the first
+cast bar to a sibling that draws its own, the flat cast bar, and the matching flat
+breath meter. Those started as settings because everything did, and a switch
+implies a decision worth making: nobody installs this and then turns the
+de-clutter off. They run whenever the addon is enabled, `/hui off` still hands
+every one of them back, and their keys are deleted from saved variables on sight
+so a stale `false` cannot read as a setting that broke. Three changes from the first
 count: pinning the chat frame turned out to belong to Edit Mode, for the same
 reason the minimap tuck did — both are placed by the layout now, which is Edit
 Mode's own data rather than an anchor of ours (see *Out of scope*); hiding the main bar art
@@ -344,10 +344,11 @@ HelloUI/
 ├── Minimap.lua     -- time-of-day dial, the tracking button, the clock
 ├── CastBar.lua     -- yields Blizzard's cast bar to a sibling's, and flattens
 │                      the one that remains
+├── MirrorTimer.lua -- gives breath/fatigue/death timers the same flat style
 ├── Layout.lua      -- the DragonflightUI bar arrangement, as an Edit Mode layout
 ├── Options.lua     -- canvas options panel
 └── Tests/
-    └── test_boot.lua  -- offline harness: stubs the API, loads all eleven
+    └── test_boot.lua  -- offline harness: stubs the API, loads all twelve
                           files in TOC order, drives ADDON_LOADED through
                           PLAYER_ENTERING_WORLD, asserts observable end state
 ```
@@ -429,6 +430,21 @@ including the one at login that lands after our styling pass. So the style is
 re-applied from a hook on `SetLook`. It is a *partial* undo, which is what made
 it hard to see: justification and the countdown survive it, so the result read as
 a styled bar whose border had inexplicably returned. Size and position stay Edit Mode's.
+
+**The breath meter is restyled, not reimplemented.** Classic's breath, fatigue,
+and death displays are the three interchangeable `MirrorTimer1`–`MirrorTimer3`
+frames. `MirrorTimer_Show` takes the first hidden slot, so BREATH is not reliably
+`MirrorTimer1`; all three receive the same treatment. Each already contains the
+same 195×13 `Interface\TargetingFrame\UI-StatusBar` fill and 256×64 casting-bar
+border as the player cast bar. `MirrorTimer.lua` blanks that border, puts the
+stock label on the left in the small font, and adds the current `frame.value` on
+the right after the stock `MirrorTimerFrame_OnUpdate` has refreshed it. The
+client still owns `GetMirrorTimerProgress`, pause/stop events, fill, and type
+colour — breath stays blue, fatigue yellow, death orange. `MirrorTimer1` uses a
+fixed top-centre anchor at `y = -124`, low enough to clear the top button cluster,
+and Blizzard's existing anchors continue to stack `MirrorTimer2` and
+`MirrorTimer3` beneath it. `/hui off` restores the remembered texture, font,
+label anchor, and frame anchor and hides only HelloUI's countdown.
 
 **The options panel scrolls.** The Settings canvas is a fixed ~580 units tall
 (UIParent is always 768, whatever the resolution) and this panel's left column
@@ -647,8 +663,8 @@ source and an assumption disagreed, the source won.
 
 1. `ADDON_LOADED` — saved variables, defaults, resolve the per-character
    override against the account layout.
-2. `PLAYER_LOGIN` — install hooks (button update, player health, cast bar),
-   register the options panel.
+2. `PLAYER_LOGIN` — install hooks (button update, player health, cast bar,
+   mirror timers), register the options panel.
 3. `PLAYER_ENTERING_WORLD` — first full apply: button text, custom status bars,
    darkmode, minimap, chat. Bar enable/disable goes through the apply queue.
 4. `PLAYER_REGEN_ENABLED` — drain the apply queue.

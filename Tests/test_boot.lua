@@ -752,6 +752,39 @@ pcb.SetAndUpdateShowCastbar = function(self, show) self.showCastbar = show and t
 local petcb = Frame.new("PetCastingBarFrame", _G.UIParent)
 petcb.Border = petcb:CreateTexture()
 
+-- Classic's three mirror-timer slots. BREATH is not tied to MirrorTimer1: the
+-- client takes whichever hidden slot is free, so all three need the same look.
+local mirrorTimers = {}
+for i = 1, 3 do
+    local name = "MirrorTimer" .. i
+    local timer = Frame.new(name, _G.UIParent)
+    timer:SetSize(206, 26)
+    if i == 1 then
+        timer:SetPoint("TOP", _G.UIParent, "TOP", 0, -96)
+    else
+        timer:SetPoint("TOP", mirrorTimers[i - 1], "BOTTOM", 0, 0)
+    end
+    timer:Hide()
+
+    local text = timer:CreateFontString(name .. "Text")
+    text:SetFontObject("GameFontHighlight")
+    text:SetPoint("TOP", timer, "TOP", 0, 0)
+    text:SetText("Breath")
+
+    local border = timer:CreateTexture(name .. "Border")
+    border:SetTexture("Interface\\CastingBar\\UI-CastingBar-Border")
+
+    local statusbar = makeStatusBar(name .. "StatusBar", timer)
+    statusbar:SetSize(195, 13)
+    statusbar:SetPoint("TOP", timer, "TOP", 0, -2)
+    statusbar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
+    statusbar:SetStatusBarColor(0, 0.5, 1, 1)
+    statusbar:SetMinMaxValues(0, 60)
+    statusbar:SetValue(60)
+
+    mirrorTimers[i] = timer
+end
+
 -- Unit frame art
 _G.PlayerFrameTexture = playerFrame:CreateTexture("PlayerFrameTexture")
 _G.TargetFrameTextureFrameTexture = _G.UIParent:CreateTexture("TargetFrameTextureFrameTexture")
@@ -769,7 +802,7 @@ chat:SetSize(400, 180)
 local ns = {}
 local FILES = {
     "Core.lua", "Config.lua", "Buttons.lua", "Bars.lua", "StatusBars.lua",
-    "Player.lua", "Darkmode.lua", "Minimap.lua", "CastBar.lua",
+    "Player.lua", "Darkmode.lua", "Minimap.lua", "CastBar.lua", "MirrorTimer.lua",
     "Layout.lua", "Options.lua",
 }
 
@@ -1739,6 +1772,100 @@ do
     -- Only the second styling can tell the difference.
     eq(pcb.HelloUIBackdrop:IsShown(), true, "including the backdrop, which restore had hidden")
     eq(pcb.HelloUITimer:IsShown(), true, "and the countdown")
+end
+
+print("\nmirror timer style")
+do
+    -- Every reusable slot gets the cast-bar treatment. BREATH can occupy any
+    -- one of them when fatigue or a death timer is already running.
+    for i = 1, 3 do
+        local timer = mirrorTimers[i]
+        local name = timer:GetName()
+        local statusbar = _G[name .. "StatusBar"]
+        local text = _G[name .. "Text"]
+        local border = _G[name .. "Border"]
+
+        eq(border:GetTexture(), nil, name .. " border art blanked")
+        local tp, tr, trp, tx = text:GetPoint(1)
+        ok(tp == "LEFT" and tr == statusbar and trp == "LEFT" and tx == 4,
+            name .. " label moved inside the left of its fill")
+        eq(text:GetJustifyH(), "LEFT", name .. " label left-justified")
+        eq(text:GetFontObject(), _G.GameFontHighlightSmall or "GameFontHighlightSmall",
+            name .. " label uses the same small font as the cast bar")
+        eq(text._wrap, false, name .. " label remains on one line")
+        ok(timer.HelloUITimer ~= nil and timer.HelloUITimer:IsShown(),
+            name .. " countdown created")
+        eq(timer.HelloUITimer:GetParent(), statusbar,
+            name .. " countdown draws on the fill rather than behind its child frame")
+
+        -- The stock geometry, fill texture, and type colour still belong to
+        -- Blizzard. Matching the cast bar must not turn breath gold.
+        eq(timer:GetWidth(), 206, name .. " outer width unchanged")
+        eq(statusbar:GetWidth(), 195, name .. " stock fill width unchanged")
+        eq(statusbar._statusTexture, "Interface\\TargetingFrame\\UI-StatusBar",
+            name .. " keeps Blizzard's fill texture")
+        eq(select(2, statusbar:GetStatusBarColor()), 0.5,
+            name .. " keeps the blue breath colour")
+    end
+
+    eq(ns.MirrorTimer.hooked, 3, "all reusable mirror-timer slots hooked")
+
+    local p, rel, relPoint, x, y = mirrorTimers[1]:GetPoint(1)
+    ok(p == "TOP" and rel == _G.UIParent and relPoint == "TOP" and x == 0 and y == -124,
+        "breath meter uses HelloUI's lower top-centre default")
+    local p2, rel2, relPoint2 = mirrorTimers[2]:GetPoint(1)
+    ok(p2 == "TOP" and rel2 == mirrorTimers[1] and relPoint2 == "BOTTOM",
+        "additional mirror timers keep Blizzard's stack below breath")
+
+    -- Exercise slot 3 specifically: styling only MirrorTimer1 is the tempting
+    -- implementation, and fails whenever another active timer claimed it first.
+    local breath = mirrorTimers[3]
+    breath.timer = "BREATH"
+    breath.value = 12.34
+    breath:Show()
+    breath:GetScript("OnUpdate_hook")(breath)
+    eq(breath.HelloUITimer:GetText(), "12.3",
+        "breath countdown reads Blizzard's own freshly updated value")
+    breath.value = -0.1
+    breath:GetScript("OnUpdate_hook")(breath)
+    eq(breath.HelloUITimer:GetText(), "0.0", "breath countdown stops at zero")
+    breath:Hide()
+    breath.timer = nil
+
+    -- /hui off hands the original art and label placement back, then an on
+    -- cycle applies the flat style again without losing those originals.
+    ns.Config:Set("enabled", false)
+    ns:ApplyAll()
+    for i = 1, 3 do
+        local timer = mirrorTimers[i]
+        local name = timer:GetName()
+        local text = _G[name .. "Text"]
+        eq(_G[name .. "Border"]:GetTexture(),
+            "Interface\\CastingBar\\UI-CastingBar-Border",
+            name .. " border handed back when switched off")
+        local tp, tr, trp, tx, ty = text:GetPoint(1)
+        ok(tp == "TOP" and tr == timer and trp == "TOP" and tx == 0 and ty == 0,
+            name .. " label restored to Blizzard's anchor")
+        eq(text:GetFontObject(), "GameFontHighlight", name .. " stock font restored")
+        eq(timer.HelloUITimer:IsShown(), false, name .. " countdown hidden")
+    end
+    local rp, rrel, rrelPoint, rx, ry = mirrorTimers[1]:GetPoint(1)
+    ok(rp == "TOP" and rrel == _G.UIParent and rrelPoint == "TOP"
+        and rx == 0 and ry == -96,
+        "breath meter's stock position is restored when HelloUI is off")
+
+    ns.Config:Set("enabled", true)
+    ns:ApplyAll()
+    for i = 1, 3 do
+        local timer = mirrorTimers[i]
+        local name = timer:GetName()
+        eq(_G[name .. "Border"]:GetTexture(), nil, name .. " restyled when switched on")
+        eq(timer.HelloUITimer:IsShown(), true, name .. " countdown shown again")
+    end
+
+    p, rel, relPoint, x, y = mirrorTimers[1]:GetPoint(1)
+    ok(p == "TOP" and rel == _G.UIParent and relPoint == "TOP" and x == 0 and y == -124,
+        "breath meter returns to HelloUI's default when switched on")
 end
 
 print("\ncast bar")

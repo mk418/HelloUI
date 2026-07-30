@@ -15,14 +15,15 @@ local Config = ns.Config
 -- Everything is individually switchable, and `/hui reset` puts these back.
 --------------------------------------------------------------------------
 
--- Six things are deliberately NOT here. Hiding the gryphons and bar backdrop,
+-- Seven things are deliberately NOT here. Hiding the gryphons and bar backdrop,
 -- always-visible XP and reputation text, hiding the time-of-day dial,
 -- class-colouring the player health bar, yielding the cast bar to a sibling
--- that draws its own, and the flat cast bar are what HelloUI IS. They were
--- switches because everything started as one; a switch implies a decision worth
--- making, and nobody was going to install this addon and then turn those off.
--- They now run whenever the addon is enabled, so `enabled` is the only switch
--- above them and `/hui off` still hands every one of them back.
+-- that draws its own, the flat cast bar, and the matching flat breath meter are
+-- what HelloUI IS. They were switches because everything started as one; a
+-- switch implies a decision worth making, and nobody was going to install this
+-- addon and then turn those off. They now run whenever the addon is enabled, so
+-- `enabled` is the only switch above them and `/hui off` still hands every one
+-- of them back.
 local accountDefaults = {
     enabled = true,
 

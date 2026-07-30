@@ -2,7 +2,7 @@
 ## Title: HelloUI
 ## Notes: De-clutter the stock Classic Era interface with compact XP and reputation bars.
 ## Author: Drikk
-## Version: 0.2.3
+## Version: 0.2.4
 ## Category: UI Overhaul
 ## X-Curse-Project-ID: 1625608
 ## IconTexture: Interface\AddOns\HelloUI\Icon.png
@@ -19,5 +19,6 @@ Player.lua
 Darkmode.lua
 Minimap.lua
 CastBar.lua
+MirrorTimer.lua
 Layout.lua
 Options.lua

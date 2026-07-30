@@ -145,7 +145,8 @@ alwaysNote:SetJustifyH("LEFT")
 alwaysNote:SetSpacing(2)
 alwaysNote:SetText("Always on: gryphons and bar backdrop hidden, compact XP and reputation " ..
     "bars, time-of-day dial hidden, class-coloured player health, and a flat " ..
-    "cast bar that steps aside when a sibling addon draws its own.")
+    "cast bar that steps aside when a sibling addon draws its own, with a matching " ..
+    "breath meter.")
 
 local enabledCheck = SettingCheck("Enabled", "Enable HelloUI", alwaysNote, "BOTTOMLEFT", -2, -14, "enabled",
     "Master switch. Turning this off stops HelloUI re-asserting anything, " ..

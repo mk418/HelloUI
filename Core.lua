@@ -1,6 +1,6 @@
 local ADDON_NAME, ns = ...
 ns.ADDON_NAME = ADDON_NAME
-ns.VERSION = "0.2.3"
+ns.VERSION = "0.2.4"
 
 local PREFIX = "|cff80c0ffHelloUI|r "
 
@@ -207,6 +207,7 @@ ns.MODULES = {
     "Darkmode",
     "Minimap",
     "CastBar",
+    "MirrorTimer",
 }
 
 -- Layout is deliberately NOT in that list. ns:ApplyAll runs on every
