@@ -12,8 +12,9 @@ local Config = ns.Config
 -- the field, its shared UnitFrameHealthBar_Update path reads it before updating
 -- player, target and target-of-target frames. An addon-written control-flow
 -- value can therefore carry taint into TargetFrameToT's protected show/anchor
--- work. A secure post-hook is the safer boundary: Blizzard completes its
--- update first, then HelloUI changes only the player bar's visual colour.
+-- work. Secure post-hooks are the safer boundary: Blizzard completes its
+-- full update or value-change recolour first, then HelloUI changes only the
+-- player bar's visual colour.
 --
 -- The bar is still a named global on 1.15.9 - PlayerFrame.xml declares
 -- `<StatusBar name="PlayerFrameHealthBar" parentKey="HealthBar">` as a
@@ -38,6 +39,10 @@ local function setClassColor(bar)
     local _, class = UnitClass("player")
     local r, g, b = ns:ClassColor(class)
     bar:SetStatusBarColor(r, g, b, 1)
+end
+
+local function restoreClassColor(bar)
+    if bar == healthBar() and Config:Enabled() then setClassColor(bar) end
 end
 
 --------------------------------------------------------------------------
@@ -216,10 +221,16 @@ end
 
 function Player:Init()
     if type(UnitFrameHealthBar_Update) == "function" then
-        hooksecurefunc("UnitFrameHealthBar_Update", function(bar)
-            if bar == healthBar() and Config:Enabled() then setClassColor(bar) end
-        end)
+        hooksecurefunc("UnitFrameHealthBar_Update", restoreClassColor)
         Player.hookedHealth = true
+    end
+
+    -- HealthBar_OnValueChanged has its own colour update. It can run without
+    -- UnitFrameHealthBar_Update (most visibly as health changes), otherwise
+    -- Blizzard's default green survives until the next full frame refresh.
+    if type(_G["HealthBar_OnValueChanged"]) == "function" then
+        hooksecurefunc("HealthBar_OnValueChanged", restoreClassColor)
+        Player.hookedHealthValue = true
     end
 
     -- The class cannot change, but the frame can be re-set to a vehicle or

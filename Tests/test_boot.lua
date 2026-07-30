@@ -345,6 +345,9 @@ _G.LOCALIZED_CLASS_NAMES_FEMALE = { WARRIOR = "Warrior", MAGE = "Mage" }
 _G.UnitFrameHealthBar_Update = function(bar)
     bar:SetStatusBarColor(0, 1, 0, 1)
 end
+_G.HealthBar_OnValueChanged = function(bar)
+    bar:SetStatusBarColor(0, 1, 0, 1)
+end
 _G.CopyTable = function(t)
     if type(t) ~= "table" then return t end
     local out = {}
@@ -995,6 +998,11 @@ r, g, b = healthBar:GetStatusBarColor()
 eq(r, 0.78, "secure post-hook restores the class colour after Blizzard updates")
 eq(g, 0.61, "post-hook runs after Blizzard's green reset")
 eq(b, 0.43, "post-hook restores the class colour's blue channel")
+_G.HealthBar_OnValueChanged(healthBar, 50)
+r, g, b = healthBar:GetStatusBarColor()
+eq(r, 0.78, "value-change post-hook restores the class colour")
+eq(g, 0.61, "value-change post-hook replaces Blizzard's green reset")
+eq(b, 0.43, "value-change post-hook restores the class colour's blue channel")
 eq(healthBar.lockColor, nil, "post-hook does not taint lockColor")
 eq(ns.Player.RepairTargetOfTarget, nil, "protected repair is not exposed to automatic callers")
 ok(_G.StaticPopupDialogs["HELLOUI_FIX_TARGET_OF_TARGET"] ~= nil,
@@ -2030,6 +2038,7 @@ print("\nregressions")
 ok(hooks["ToggleMinimap"], "ToggleMinimap hooked (re-hides the dial after a toggle)")
 ok(hooks["Show"], "GameTimeFrame:Show hooked (catches other addons showing it)")
 ok(hooks["UnitFrameHealthBar_Update"], "player colour uses a secure post-hook")
+ok(hooks["HealthBar_OnValueChanged"], "player colour covers value-change recolours")
 
 -- barsOff is authoritative now: a bar absent from it is shown, even if the
 -- player's own Blizzard setting had it hidden. That reversal is only
