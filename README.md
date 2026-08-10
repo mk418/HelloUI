@@ -33,6 +33,11 @@ text permanently readable. See `DESIGN.md` for the evidence and the reasoning.
   bar compacts into the bottom slot. XP disappears explicitly at the player
   level cap, even on clients where `UnitXPMax()` remains nonzero there.
 - **Class-colours the player health bar.**
+- **Makes room for the class combat addons.** While a visible HelloWarrior,
+  HelloDruid, or HelloRogue cluster is registered, central action bars 1-3 are
+  suppressed and the untouched cluster occupies their bottom-centre anchor.
+  HelloMage also suppresses bar 4 for its attached utility bank. Hiding the
+  cluster or disabling HelloUI restores the configured bars.
 - **Detects a detached target-of-target frame** after login and offers a
   user-confirmed repair. It never changes the protected frame or reloads from a
   timer. Classic Era can retain the stale saved entry for one reload; when it

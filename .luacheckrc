@@ -16,6 +16,7 @@ ignore = {
 globals = {
     "HelloUIDB",       -- SavedVariables
     "HelloUICharDB",   -- SavedVariablesPerCharacter
+    "HelloUIClassBarAPI", -- public class-addon integration API
     "SlashCmdList",
     "SLASH_HELLOUI1",
     "SLASH_HELLOUI2",

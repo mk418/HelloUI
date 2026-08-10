@@ -953,6 +953,66 @@ ns:ApplyAll()
 eq(_G.MainActionBar._alpha, 1, "bar1 restored")
 eq(_G.ActionButton1._mouse, true, "bar1 buttons interactive again")
 
+-- Supported class addons register their actual cluster frame. Suppression is
+-- effective state only: it follows visibility and never writes into barsOff.
+local warriorLayouts = {}
+local warriorCluster = Frame.new("HelloWarrior_Container", _G.UIParent)
+ok(HelloUIClassBarAPI.Register("HelloWarrior", warriorCluster, function(integrated)
+    warriorLayouts[#warriorLayouts + 1] = integrated
+end), "HelloWarrior cluster registered")
+eq(warriorLayouts[#warriorLayouts], true, "registration enables HelloUI placement")
+local anchorPoint, anchorFrame, anchorRelativePoint = HelloUIClassBarAPI.GetAnchor()
+eq(anchorPoint, "BOTTOM", "class cluster anchor uses its bottom edge")
+eq(anchorFrame, _G.MainActionBar, "class cluster anchor follows MainActionBar")
+eq(anchorRelativePoint, "BOTTOM", "class cluster shares MainActionBar's bottom edge")
+eq(_G.MainActionBar._alpha, 0, "visible class cluster suppresses bar1")
+eq(settingValues["PROXY_SHOW_ACTIONBAR_2"], false, "visible class cluster suppresses bar2")
+eq(settingValues["PROXY_SHOW_ACTIONBAR_3"], false, "visible class cluster suppresses bar3")
+eq(ns.Config:GetTable("barsOff").bar1, nil, "automatic suppression does not mutate barsOff")
+
+warriorCluster:Hide()
+warriorCluster._scripts.OnHide_hook()
+eq(_G.MainActionBar._alpha, 1, "hiding the class cluster restores bar1")
+eq(settingValues["PROXY_SHOW_ACTIONBAR_2"], true, "hiding the class cluster restores bar2")
+eq(settingValues["PROXY_SHOW_ACTIONBAR_3"], true, "hiding the class cluster restores bar3")
+
+local mageCluster = Frame.new("HelloMageCluster", _G.UIParent)
+ok(HelloUIClassBarAPI.Register("HelloMage", mageCluster, function() end),
+    "HelloMage cluster registered")
+eq(settingValues["PROXY_SHOW_ACTIONBAR_4"], false, "visible Mage cluster also suppresses bar4")
+mageCluster:Hide()
+mageCluster._scripts.OnHide_hook()
+eq(settingValues["PROXY_SHOW_ACTIONBAR_4"], true, "hiding Mage restores bar4")
+
+warriorCluster:Show()
+warriorCluster._scripts.OnShow_hook()
+ns.Config:Set("enabled", false)
+ns:ApplyAll()
+eq(warriorLayouts[#warriorLayouts], false, "disabling HelloUI releases class placement")
+eq(_G.MainActionBar._alpha, 1, "disabling HelloUI restores class-suppressed bar1")
+eq(settingValues["PROXY_SHOW_ACTIONBAR_2"], true, "disabling HelloUI restores class-suppressed bar2")
+ns.Config:Set("enabled", true)
+ns:ApplyAll()
+eq(warriorLayouts[#warriorLayouts], true, "re-enabling HelloUI restores class placement")
+warriorCluster:Hide()
+warriorCluster._scripts.OnHide_hook()
+
+-- Visibility-driven suppression uses the same keyed protected-work queue as
+-- the manual bar controls; no protected frame is changed during combat.
+inCombat = true
+warriorCluster:Show()
+warriorCluster._scripts.OnShow_hook()
+eq(_G.MainActionBar._alpha, 1, "class integration waits rather than suppressing bar1 in combat")
+eq(settingValues["PROXY_SHOW_ACTIONBAR_2"], true,
+    "class integration waits rather than suppressing bar2 in combat")
+inCombat = false
+fire("PLAYER_REGEN_ENABLED")
+eq(_G.MainActionBar._alpha, 0, "queued class integration suppresses bar1 after combat")
+eq(settingValues["PROXY_SHOW_ACTIONBAR_2"], false,
+    "queued class integration suppresses bar2 after combat")
+warriorCluster:Hide()
+warriorCluster._scripts.OnHide_hook()
+
 ----------------------------------------------------------------------
 -- Assertions: status bars, player, minimap, chat, darkmode
 ----------------------------------------------------------------------

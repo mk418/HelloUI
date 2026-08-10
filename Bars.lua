@@ -6,6 +6,87 @@ local Bars = ns.Bars
 local Config = ns.Config
 
 --------------------------------------------------------------------------
+-- Optional class-addon integration
+--
+-- The class addons remain standalone and never touch Blizzard's bars. They
+-- register their top-level cluster here; HelloUI then owns both sides of the
+-- accommodation: suppressing the redundant stock bars and lending an anchor
+-- that follows MainActionBar when Edit Mode moves it.
+--------------------------------------------------------------------------
+
+local CLASS_BAR_SETS = {
+    HelloWarrior = { bar1 = true, bar2 = true, bar3 = true },
+    HelloDruid   = { bar1 = true, bar2 = true, bar3 = true },
+    HelloRogue   = { bar1 = true, bar2 = true, bar3 = true },
+    -- The Mage utility bank occupies the right-hand block when bottom-aligned.
+    HelloMage    = { bar1 = true, bar2 = true, bar3 = true, bar4 = true },
+}
+
+local classClusters = {}
+
+local function integrationEnabled()
+    return HelloUIDB ~= nil and Config:Enabled()
+end
+
+local function notifyLayout(entry, integrated)
+    integrated = integrated and true or false
+    if entry.integrated == integrated then return end
+    entry.integrated = integrated
+    if entry.layoutCallback then
+        ns:WhenSafe("Bars:ClassLayout:" .. entry.addonName, function()
+            entry.layoutCallback(integrated)
+        end)
+    end
+end
+
+local function effectiveClassBars()
+    local off, active = {}, {}
+    if not integrationEnabled() then return off, active end
+
+    for addonName, entry in pairs(classClusters) do
+        if entry.frame and entry.frame.IsShown and entry.frame:IsShown() then
+            active[#active + 1] = addonName
+            for barID in pairs(CLASS_BAR_SETS[addonName]) do off[barID] = true end
+        end
+    end
+    table.sort(active)
+    return off, active
+end
+
+local function refreshClassBars()
+    ns:WhenSafe("Bars:ClassIntegration", function() Bars:Apply() end)
+end
+
+local function registerClassCluster(addonName, frame, layoutCallback)
+    if not CLASS_BAR_SETS[addonName] or not frame then return false end
+
+    local entry = {
+        addonName = addonName,
+        frame = frame,
+        layoutCallback = layoutCallback,
+    }
+    classClusters[addonName] = entry
+
+    if frame.HookScript then
+        frame:HookScript("OnShow", refreshClassBars)
+        frame:HookScript("OnHide", refreshClassBars)
+    end
+
+    notifyLayout(entry, integrationEnabled())
+    refreshClassBars()
+    return true
+end
+
+HelloUIClassBarAPI = {
+    Register = registerClassCluster,
+    GetAnchor = function()
+        local mainBar = _G["MainActionBar"]
+        if not integrationEnabled() or not mainBar then return nil end
+        return "BOTTOM", mainBar, "BOTTOM", 0, 0
+    end,
+}
+
+--------------------------------------------------------------------------
 -- The bar table
 --
 -- Blizzard's numbering, not DragonflightUI's. This matters: DragonflightUI
@@ -282,13 +363,18 @@ end
 function Bars:Apply()
     local off = Config:GetTable("barsOff")
     local enabled = Config:Get("enabled")
+    local classOff = effectiveClassBars()
+
+    for _, entry in pairs(classClusters) do
+        notifyLayout(entry, enabled)
+    end
 
     applyBarArt()
 
     for _, def in ipairs(BARS) do
         -- With the addon switched off every bar goes back to whatever the
         -- player had, so `/hui off` is a real off rather than a freeze.
-        local wantOff = enabled and off[def.id] and true or false
+        local wantOff = enabled and (off[def.id] or classOff[def.id]) and true or false
 
         ns:WhenSafe("Bars:" .. def.id, function()
             if def.proxy then
@@ -311,6 +397,7 @@ end
 
 function Bars:Status()
     local off = Config:GetTable("barsOff")
+    local classOff, activeClasses = effectiveClassBars()
     local list, native, forced = {}, {}, {}
     for _, def in ipairs(BARS) do
         if off[def.id] then
@@ -329,8 +416,18 @@ function Bars:Status()
         endCaps and tostring(endCaps:IsShown()) or "missing",
         tostring(Bars.hookedEndCaps or false))
 
+    if #activeClasses > 0 then
+        local automatic = {}
+        for _, def in ipairs(BARS) do
+            if classOff[def.id] then automatic[#automatic + 1] = def.id end
+        end
+        ns:Print("class integration: %s |cff808080(automatically off: %s)|r",
+            table.concat(activeClasses, ", "), table.concat(automatic, ", "))
+    end
+
     if #list == 0 then
-        ns:Print("bars: all shown")
+        if #activeClasses > 0 then ns:Print("bars configured off: none")
+        else ns:Print("bars: all shown") end
         return
     end
     ns:Print("bars off: %s", table.concat(list, ", "))

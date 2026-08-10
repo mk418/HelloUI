@@ -285,7 +285,12 @@ DragonflightUI's layout was its default.
   `Paperdoll.lua`), and CharacterStatsClassic is installed on top.
 - **Stance bars, totem bars, healer grids, ability bars.** HelloWarrior,
   HelloTotems and HelloHealer own these. HelloUI hides Blizzard's; it never
-  draws a replacement.
+  draws a replacement. HelloWarrior, HelloMage, HelloDruid and HelloRogue can
+  register their cluster through `HelloUIClassBarAPI`: while that cluster is
+  visible, bars 1-3 are effective additions to `barsOff` without mutating the
+  profile (Mage also adds bar 4), and an untouched cluster follows
+  MainActionBar's bottom anchor. Hiding the cluster or disabling HelloUI hands
+  the configured bars back.
 - **Recipe favourites** — Skillet-Classic and RecipeMaster are installed. The
   five saved favourites (Transmute: Arcanite, Dense Dynamite, Goblin Sapper
   Charge, Unstable Trigger, Solid Blasting Powder) are worth re-pinning by hand
