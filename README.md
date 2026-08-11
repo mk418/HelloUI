@@ -29,9 +29,11 @@ text permanently readable. See `DESIGN.md` for the evidence and the reasoning.
   as it does under Blizzard's own setting; the micro menu and bags stay.
 - **Draws its own XP and watched-reputation bars** at 454×10px, matching the
   action stack instead of stretching Blizzard's 1024px bars. Values and
-  percentages stay visible, rested XP extends behind the XP fill, and a lone
-  bar compacts into the bottom slot. XP disappears explicitly at the player
-  level cap, even on clients where `UnitXPMax()` remains nonzero there.
+  percentages stay visible, the fill reflects progress within the current
+  level or reputation standing, and a lone bar compacts into the bottom slot.
+  The XP fill is blue while rested XP is available and purple otherwise; its
+  rested amount remains available in the tooltip. XP disappears explicitly at
+  the player level cap, even on clients where `UnitXPMax()` remains nonzero.
 - **Class-colours the player health bar.**
 - **Makes room for the class combat addons.** While a visible HelloWarrior,
   HelloDruid, or HelloRogue cluster is registered, central action bars 1-3 are

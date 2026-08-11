@@ -14,6 +14,8 @@ local WIDTH = 454
 local HEIGHT = 10
 local GAP = 1
 local BOTTOM = 3
+local XP_COLOR = { r = 0.58, g = 0.18, b = 0.72 }
+local RESTED_XP_COLOR = { r = 0.10, g = 0.32, b = 0.72 }
 
 local bars = {}
 local stockAlpha
@@ -59,14 +61,6 @@ local function createBar(name)
     background:SetAllPoints()
     background:SetColorTexture(0.03, 0.03, 0.03, 0.9)
 
-    -- Rested XP is drawn first and extends beyond the current-XP fill. The
-    -- normal fill, created second, covers the portion already earned.
-    local rested = CreateFrame("StatusBar", nil, frame)
-    rested:SetPoint("TOPLEFT", frame, "TOPLEFT", 1, -1)
-    rested:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -1, 1)
-    rested:SetStatusBarTexture("Interface\\TARGETINGFRAME\\UI-StatusBar")
-    rested:SetStatusBarColor(0.10, 0.32, 0.72, 1)
-
     local fill = CreateFrame("StatusBar", nil, frame)
     fill:SetPoint("TOPLEFT", frame, "TOPLEFT", 1, -1)
     fill:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -1, 1)
@@ -81,7 +75,6 @@ local function createBar(name)
     text:SetWordWrap(false)
     text:SetMaxLines(1)
 
-    frame.rested = rested
     frame.fill = fill
     frame.text = text
     frame:SetScript("OnEnter", showTooltip)
@@ -108,8 +101,6 @@ local function setBar(bar, label, value, maximum, color, rested)
     rested = math.max(0, tonumber(rested) or 0)
     local percent = value / maximum * 100
 
-    bar.rested:SetMinMaxValues(0, maximum)
-    bar.rested:SetValue(rested > 0 and math.min(maximum, value + rested) or 0)
     bar.fill:SetMinMaxValues(0, maximum)
     bar.fill:SetValue(value)
     bar.fill:SetStatusBarColor(color.r, color.g, color.b, 1)
@@ -158,8 +149,9 @@ local function updateXP()
     local maximum = UnitXPMax("player") or 0
     local current = UnitXP("player") or 0
     local rested = GetXPExhaustion and GetXPExhaustion() or 0
+    local color = rested > 0 and RESTED_XP_COLOR or XP_COLOR
     return setBar(bars.xp, "XP", current, maximum,
-        { r = 0.58, g = 0.18, b = 0.72 }, rested)
+        color, rested)
 end
 
 local function watchedFaction()

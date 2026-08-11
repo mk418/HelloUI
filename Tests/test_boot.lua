@@ -1029,13 +1029,23 @@ eq(xpBar:GetWidth(), 454, "custom XP bar matches the action stack width")
 eq(repBar:GetWidth(), 454, "custom reputation bar matches the action stack width")
 eq(xpBar:GetHeight(), 10, "custom XP bar keeps a readable height")
 eq(xpBar.fill:GetValue(), 12345, "XP fill reflects current experience")
-eq(xpBar.rested:GetValue(), 16345, "rested fill extends past current experience")
+eq(xpBar.rested, nil, "rested XP does not color the unearned portion of the bar")
+eq(xpBar.data.rested, 4000, "rested XP remains available to the tooltip")
+eq(select(1, xpBar.fill:GetStatusBarColor()), 0.10,
+    "XP fill is blue while rested XP is available")
 eq(repBar.fill:GetValue(), 4500, "reputation is normalized to its standing threshold")
 eq(select(2, repBar.fill:GetMinMaxValues()), 6000, "reputation maximum is the standing span")
 ok(xpBar.text:GetText():find("61.7%%") ~= nil, "XP percentage is always visible")
 ok(repBar.text:GetText():find("Stormwind", 1, true) ~= nil, "watched faction name is visible")
 eq(select(5, xpBar:GetPoint(1)), 3, "XP bar starts at the bottom of the action stack")
 eq(select(5, repBar:GetPoint(1)), 14, "reputation bar stacks immediately above XP")
+
+restedXP = 0
+fire("UPDATE_EXHAUSTION")
+eq(select(1, xpBar.fill:GetStatusBarColor()), 0.58,
+    "XP fill returns to purple without rested XP")
+restedXP = 4000
+fire("UPDATE_EXHAUSTION")
 
 playerXP = 15000
 fire("PLAYER_XP_UPDATE", "player")

@@ -189,9 +189,11 @@ DragonflightUI's layout was its default.
   feeding addon-written dimensions back into UI panel positioning, which can
   taint the Game Menu's protected Logout/Exit callback.
 
-  The XP bar reads `UnitXP`, `UnitXPMax` and `GetXPExhaustion`; its rested fill
-  extends behind the earned-XP fill. The reputation bar reads the watched
-  faction through `C_Reputation.GetWatchedFactionData`, with the legacy
+  The XP bar reads `UnitXP`, `UnitXPMax` and `GetXPExhaustion`; only earned XP
+  fills the bar. That fill is blue while rested XP is available and purple
+  otherwise, while the rested amount remains available in its tooltip. The
+  reputation bar reads the watched faction through
+  `C_Reputation.GetWatchedFactionData`, with the legacy
   `GetWatchedFactionInfo` as a feature-detected fallback, and normalizes the
   value to the current standing's thresholds. Values and percentages are
   always printed on the addon-owned bars, so HelloUI no longer changes the
