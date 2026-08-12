@@ -45,6 +45,63 @@ local function macroOf(btn, name)
 end
 
 --------------------------------------------------------------------------
+-- Auto-attack flash
+--
+-- Era's ActionButtonTemplate gives the stock flash atlas its native size and
+-- only a TOPLEFT anchor. The atlas is larger than the 36px action button, so
+-- the red square that Blizzard toggles for attack actions spills outside it.
+-- Pin that one stock texture to its button. Stance and pet buttons inherit the
+-- SmallActionButtonMixin's deliberate flash size and are left alone, as is any
+-- texture Masque (or another skin) has replaced with a non-stock atlas.
+--------------------------------------------------------------------------
+
+local ATTACK_FLASH_ATLAS = "UI-HUD-ActionBar-IconFrame-Flash"
+local attackFlashOriginals = setmetatable({}, { __mode = "k" })
+
+local function attackFlashOf(btn, name)
+    return btn.Flash or _G[name .. "Flash"]
+end
+
+local function applyAttackFlash(btn, name)
+    local flash = attackFlashOf(btn, name)
+    if not flash then return end
+
+    local original = attackFlashOriginals[flash]
+    if not Config:Enabled() then
+        if original then
+            flash:ClearAllPoints()
+            flash:SetSize(original.width, original.height)
+            if original.point then
+                flash:SetPoint(original.point, original.relativeTo,
+                    original.relativePoint, original.x, original.y)
+            end
+            attackFlashOriginals[flash] = nil
+        end
+        return
+    end
+
+    -- Texture:GetAtlas exists on the supported 1.15.9 client. Requiring the
+    -- exact stock atlas makes this geometry fix invisible to button skins.
+    if not flash.GetAtlas or flash:GetAtlas() ~= ATTACK_FLASH_ATLAS then return end
+
+    if not original then
+        local point, relativeTo, relativePoint, x, y = flash:GetPoint(1)
+        attackFlashOriginals[flash] = {
+            width = flash:GetWidth(),
+            height = flash:GetHeight(),
+            point = point,
+            relativeTo = relativeTo,
+            relativePoint = relativePoint,
+            x = x,
+            y = y,
+        }
+    end
+
+    flash:ClearAllPoints()
+    flash:SetAllPoints(btn)
+end
+
+--------------------------------------------------------------------------
 -- No button borders
 --
 -- There was a feature here that took ActionButtonTemplate's NormalTexture
@@ -79,6 +136,9 @@ function Buttons:Apply()
             local btn = _G[name]
             if btn then
                 applyToButton(btn, name)
+                if def.id:match("^bar%d$") then
+                    applyAttackFlash(btn, name)
+                end
                 found = found + 1
             end
         end

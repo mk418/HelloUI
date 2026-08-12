@@ -93,10 +93,11 @@ text permanently readable. See `DESIGN.md` for the evidence and the reasoning.
 Defaults reproduce the layout that was already in use, so a fresh install should
 look like the thing it replaced rather than a blank slate.
 
-Seven of those are simply what the addon is, and have no switch: the gryphons and
+Eight of those are simply what the addon is, and have no switch: the gryphons and
 bar backdrop, the compact XP/reputation bars, the time-of-day dial, the
-class-coloured health bar, both cast bar behaviours, and the matching breath
-meter. `/hui off` still hands all of them back.
+class-coloured health bar, both cast bar behaviours, the matching breath meter,
+and the correctly bounded auto-attack flash. `/hui off` still hands all of them
+back.
 Everything else in the panel is a checkbox.
 
 ## What it deliberately doesn't do

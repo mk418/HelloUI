@@ -208,6 +208,8 @@ function Frame:CreateTexture(name)
     t.SetDesaturated = function(s, v) s._desat = v and true or false; return true end
     t.SetTexture = function(s, tex) s._tex = tex end
     t.GetTexture = function(s) return s._tex end
+    t.SetAtlas = function(s, atlas) s._atlas = atlas end
+    t.GetAtlas = function(s) return s._atlas end
     self._regions[#self._regions + 1] = t
     return t
 end
@@ -523,6 +525,9 @@ for _, def in ipairs(BARS) do
     bar:SetSize(454, 36)
     for i = 1, def[3] do
         local btn = Frame.new(def[2] .. i, bar)
+        local small = def[2] == "StanceButton" or def[2] == "PetActionButton"
+        local buttonSize = small and 30 or 36
+        btn:SetSize(buttonSize, buttonSize)
         btn.Name = btn:CreateFontString(def[2] .. i .. "Name")
         local container = Frame.new(nil, btn)
         btn.HotKey = container:CreateFontString(def[2] .. i .. "HotKey")
@@ -534,7 +539,25 @@ for _, def in ipairs(BARS) do
         normal.SetAlpha = function(s, a) s._alpha = a end
         normal.GetAlpha = function(s) return s._alpha end
         btn.GetNormalTexture = function() return normal end
+
+        if def[2] ~= "StanceButton" and def[2] ~= "PetActionButton" then
+            local flash = btn:CreateTexture(def[2] .. i .. "Flash")
+            flash:SetAtlas("UI-HUD-ActionBar-IconFrame-Flash")
+            flash:SetSize(46, 45)
+            flash:SetPoint("TOPLEFT", btn, "TOPLEFT", 0, 0)
+            btn.Flash = flash
+        end
     end
+end
+
+-- A skin is allowed to own action-button art. This one stands in for Masque
+-- and must retain its custom flash geometry when HelloUI applies.
+do
+    local flash = _G.MultiBar7Button12.Flash
+    flash:SetAtlas("Masque-Custom-Flash")
+    flash:ClearAllPoints()
+    flash:SetSize(52, 52)
+    flash:SetPoint("CENTER", _G.MultiBar7Button12, "CENTER", 2, -1)
 end
 
 _G.ActionBarActionButtonMixin = { UpdateHotkeys = function() end }
@@ -913,6 +936,16 @@ eq(_G.ActionButton1.Name._alpha, 0, "bar1 macro text hidden")
 eq(_G.StanceButton1.HotKey._alpha, 0, "stance keybind text hidden")
 eq(_G.PetActionButton10.Name._alpha, 0, "pet macro text hidden")
 eq(_G.MultiBar7Button12.HotKey._alpha, 0, "bar8 keybind text hidden")
+local attackFlash = _G.ActionButton1.Flash
+local flashPoint, flashRelative = attackFlash:GetPoint(1)
+eq(flashPoint, "ALLPOINTS", "stock auto-attack flash fitted to its button")
+eq(flashRelative, _G.ActionButton1, "stock auto-attack flash follows the right button")
+local masqueFlash = _G.MultiBar7Button12.Flash
+local masquePoint, masqueRelative, _, masqueX, masqueY = masqueFlash:GetPoint(1)
+eq(masquePoint, "CENTER", "custom action-button flash anchor left alone")
+eq(masqueRelative, _G.MultiBar7Button12, "custom flash still follows its button")
+eq(masqueX, 2, "custom flash horizontal offset left alone")
+eq(masqueY, -1, "custom flash vertical offset left alone")
 -- The border feature was removed after seeing it on screen, so the guarantee is
 -- now the opposite one: HelloUI must not touch NormalTexture's alpha at all.
 -- Set to something Blizzard never uses first, so "left alone" cannot pass by
@@ -2135,6 +2168,11 @@ print("\nmaster switch")
 _G.SlashCmdList["HELLOUI"]("off")
 eq(ns.Config:Get("enabled"), false, "/hui off disables")
 eq(_G.ActionButton1.HotKey._alpha, 1, "keybind text restored when disabled")
+eq(attackFlash:GetWidth(), 46, "auto-attack flash width restored when disabled")
+eq(attackFlash:GetHeight(), 45, "auto-attack flash height restored when disabled")
+local restoredFlashPoint, restoredFlashRelative = attackFlash:GetPoint(1)
+eq(restoredFlashPoint, "TOPLEFT", "auto-attack flash anchor restored when disabled")
+eq(restoredFlashRelative, _G.ActionButton1, "restored flash follows the right button")
 eq(cvars.xpBarText, "0", "xpBarText restored to its original value when disabled")
 eq(select(2, healthBar:GetStatusBarColor()), 1, "player health colour handed back when disabled")
 eq(healthBar.lockColor, nil, "player health control-flow fields remain untouched")
@@ -2154,6 +2192,7 @@ eq(chat:GetWidth(), 400, "chat still untouched")
 _G.SlashCmdList["HELLOUI"]("on")
 eq(ns.Config:Get("enabled"), true, "/hui on re-enables")
 eq(_G.ActionButton1.HotKey._alpha, 0, "keybind text hidden again")
+eq(select(1, attackFlash:GetPoint(1)), "ALLPOINTS", "auto-attack flash fitted again")
 eq(_G.StatusTrackingBarManager:GetAlpha(), 0, "stock status bars suppressed again")
 eq(xpBar:IsShown(), true, "custom XP bar shown again")
 

@@ -76,11 +76,12 @@ ships in the client.
 
 ## Current scope
 
-Eleven features. Four are switches; the other seven are simply what the addon does
+Twelve features. Four are switches; the other eight are simply what the addon does
 — hiding the gryphons and bar backdrop, compact XP and reputation bars,
 hiding the time-of-day dial, class-colouring the player health bar, yielding the
 cast bar to a sibling that draws its own, the flat cast bar, and the matching flat
-breath meter. Those started as settings because everything did, and a switch
+breath meter, plus fitting the stock auto-attack flash to its button. Those
+started as settings because everything did, and a switch
 implies a decision worth making: nobody installs this and then turns the
 de-clutter off. They run whenever the addon is enabled, `/hui off` still hands
 every one of them back, and their keys are deleted from saved variables on sight
@@ -96,6 +97,11 @@ DragonflightUI's layout was its default.
 - **Button text stripping** — keybind text and macro name to alpha 0 across
   bars 1–8, the stance bar and the pet bar. The single most-set value in the old
   profile: every bar, both flags, no exceptions.
+- **Auto-attack flash bounds** — Era gives the normal action-button flash its
+  atlas's native size and only a top-left anchor, so the red attack pulse is
+  larger than the 36px button. HelloUI fits the stock flash to buttons on bars
+  1–8, leaves the deliberately sized stance/pet flashes and non-stock skin art
+  alone, and restores Blizzard's original geometry on `/hui off`.
 - **Bar visibility** — turn a whole bar off. One bar was off everywhere; bar 1
   and the stance bar were off on one character. This is the feature that makes
   room for the class addons: they are all purely additive by design and will
@@ -567,6 +573,13 @@ source and an assumption disagreed, the source won.
   The object fields are preferred anyway because Blizzard installs them
   deliberately (`ActionButtonTextOverlayContainerMixin:OnLoad`) and they don't
   depend on naming semantics.
+- **Auto-attack flash.** `ActionButtonTemplate` declares `Flash` with the
+  `UI-HUD-ActionBar-IconFrame-Flash` atlas, `useAtlasSize="true"`, and only a
+  `TOPLEFT` anchor. `ActionButton.lua` toggles that region specifically for
+  attack and auto-repeat actions. Constraining the stock atlas to all points of
+  its 36px button removes the oversized pulse without suppressing the state
+  indicator. `SmallActionButtonMixin` assigns stance/pet flashes its own size,
+  so those buttons are intentionally outside this fix.
 - **Alpha on button text needs no re-assertion at all.** Blizzard reaches those
   two font strings through `Show`, `Hide`, `SetText` and `SetVertexColor` only.
   A full-tree search finds no `SetAlpha` on an action button's `HotKey` or
