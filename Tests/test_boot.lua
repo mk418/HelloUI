@@ -1013,6 +1013,28 @@ eq(settingValues["PROXY_SHOW_ACTIONBAR_2"], false,
 warriorCluster:Hide()
 warriorCluster._scripts.OnHide_hook()
 
+-- HelloHealer only creates its main secure header on supported healer classes.
+-- Its existence activates the accommodation without HelloUI hooking or
+-- otherwise modifying that protected frame.
+local healerHeader = Frame.new("HelloHealerMainHeader1", _G.UIParent)
+ns:ApplyAll()
+eq(settingValues["PROXY_SHOW_ACTIONBAR_5"], false,
+    "HelloHealer suppresses the bottom-left bar5")
+eq(ns.Config:GetTable("barsOff").bar5, nil,
+    "HelloHealer suppression does not mutate barsOff")
+healerHeader:Hide()
+ns:ApplyAll()
+eq(settingValues["PROXY_SHOW_ACTIONBAR_5"], false,
+    "HelloUI never depends on or hooks the secure header's visibility")
+eq(healerHeader._scripts.OnShow_hook, nil,
+    "HelloUI does not hook the HelloHealer secure header")
+eq(healerHeader._scripts.OnHide_hook, nil,
+    "HelloUI does not hook the HelloHealer secure header's hide path")
+_G.HelloHealerMainHeader1 = nil
+ns:ApplyAll()
+eq(settingValues["PROXY_SHOW_ACTIONBAR_5"], true,
+    "removing HelloHealer restores the configured bar5 state")
+
 ----------------------------------------------------------------------
 -- Assertions: status bars, player, minimap, chat, darkmode
 ----------------------------------------------------------------------
@@ -1336,6 +1358,25 @@ do
     eq(chatSettings[2], 2, "chat height hundreds set to 2")
     eq(chatSettings[3], 50, "chat height remainder set to 50 (= 250px total)")
 
+    -- On healer classes HelloHealer creates a named secure header. A rebuild
+    -- uses the bottom-left space vacated by bar 5, keeping the raised strip
+    -- available to its healing grid on short screens.
+    _G.HelloHealerMainHeader1 = Frame.new("HelloHealerMainHeader1", _G.UIParent)
+    local healerSystems = ns.Layout:Build()
+    local healerChat
+    for _, e in ipairs(healerSystems or {}) do
+        if e.system == 6 then healerChat = e end
+    end
+    eq(healerChat and healerChat.anchorInfo.offsetY, 56,
+        "healer chat moves down while clearing HelloBuffCap")
+    local healerChatSettings = {}
+    for _, st in ipairs((healerChat and healerChat.settings) or {}) do
+        healerChatSettings[st.setting] = st.value
+    end
+    eq(healerChatSettings[2], 2, "healer chat height hundreds stays at 2")
+    eq(healerChatSettings[3], 10, "healer chat is shortened to 210px")
+    _G.HelloHealerMainHeader1 = nil
+
     -- The minimap is nudged one slider step larger: raw 5 is 100%, raw 6 110%.
     local map
     for _, e in ipairs(sys) do
@@ -1466,6 +1507,36 @@ do
         if st.setting == 3 then size = st.value end
     end
     eq(size, 5, "reset restores the shipped icon size")
+end
+
+-- Healer geometry belongs to its own layout. The Default profile is shared
+-- across characters, so rewriting plain `HelloUI` here would move chat down
+-- for Warriors too, where the restored left bar would overlap it again.
+do
+    _G.HelloHealerMainHeader1 = Frame.new("HelloHealerMainHeader1", _G.UIParent)
+    ns.Layout:Apply(true)
+    eq(#_G._savedLayouts(), 2, "HelloHealer creates a sibling layout")
+    eq(_G._activeLayoutName(), "HelloUI - Healer", "the healer layout has a distinct name")
+
+    local healerLayout
+    for _, layout in ipairs(_G._savedLayouts()) do
+        if layout.layoutName == "HelloUI - Healer" then healerLayout = layout end
+    end
+    local healerChat
+    for _, e in ipairs((healerLayout and healerLayout.systems) or {}) do
+        if e.system == 6 then healerChat = e end
+    end
+    eq(healerChat and healerChat.anchorInfo.offsetY, 56,
+        "the healer layout stores chat above HelloBuffCap")
+
+    _G.HelloHealerMainHeader1 = nil
+    ok(ns.Layout:Activate(), "the regular layout can be restored on a non-healer")
+    eq(_G._activeLayoutName(), "HelloUI", "the regular layout remains unchanged")
+    for i = #_G._savedLayouts(), 1, -1 do
+        if _G._savedLayouts()[i].layoutName == "HelloUI - Healer" then
+            table.remove(_G._savedLayouts(), i)
+        end
+    end
 end
 
 -- The layout follows the PROFILE: a named profile gets its own layout, named

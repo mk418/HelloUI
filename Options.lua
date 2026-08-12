@@ -234,7 +234,10 @@ layoutNote:SetSpacing(2)
 layoutNote:SetText("An Edit Mode layout named HelloUI: the action bars, cast " ..
     "bar, chat frame, minimap and its size, " ..
     "the micro menu and the bags. Drag any of it in Edit Mode afterwards - your " ..
-    "changes are saved into the layout, and re-applying is the reset.")
+    "changes are saved into the layout, and re-applying is the reset. With " ..
+    "HelloHealer active, a separate Healer layout lowers chat into the space " ..
+    "freed by the bottom-left action bar, shortens it to keep the healing frames " ..
+    "clear, and keeps it above HelloBuffCap.")
 
 local askCheck = SettingCheck("AskLayout", "Offer the HelloUI layout at login",
     layoutNote, "BOTTOMLEFT", -6, -12, "askLayout",
@@ -376,7 +379,10 @@ layoutBtn:SetScript("OnEnter", function(self)
         "bags - everything that would otherwise collide with the arrangement. Run " ..
         "it again to reset the layout back to that after you have dragged things " ..
         "around - Edit Mode saves your changes into the layout, so re-applying is " ..
-        "the reset. Your own layouts are never touched.", nil, nil, nil, true)
+        "the reset. With HelloHealer active, this uses the separate Healer layout " ..
+        "and fits a shorter chat near the bottom-left between HelloBuffCap and " ..
+        "the healing frames. Your own layouts are never touched.",
+        nil, nil, nil, true)
     GameTooltip:Show()
 end)
 layoutBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)

@@ -293,6 +293,15 @@ DragonflightUI's layout was its default.
   profile (Mage also adds bar 4), and an untouched cluster follows
   MainActionBar's bottom anchor. Hiding the cluster or disabling HelloUI hands
   the configured bars back.
+  HelloHealer's `HelloHealerMainHeader1` is the corresponding runtime signal on
+  supported healer classes: while it exists, the bottom-left bar 5 is an
+  effective addition to `barsOff`. Its presence also selects the low chat
+  anchor when the Edit Mode layout is built, using the space bar 5 vacates and
+  keeping the healing grid clear on short screens. That geometry is saved as a
+  separate `HelloUI - Healer` layout (with the profile name included when
+  applicable), so the shared base layout remains valid on other classes. The
+  named frame is used instead of `IsAddOnLoaded` so an inert HelloHealer install
+  on another class changes nothing.
 - **Recipe favourites** — Skillet-Classic and RecipeMaster are installed. The
   five saved favourites (Transmute: Arcanite, Dense Dynamite, Goblin Sapper
   Charge, Unstable Trigger, Solid Blasting Powder) are worth re-pinning by hand
@@ -310,7 +319,14 @@ DragonflightUI's layout was its default.
   its anchor *and* its width and height. The bar layout therefore writes the
   chat position and a 250px height into the layout itself, lifting its bottom
   edge clear of both the bottom-left flank block and the left-aligned stance
-  bar. It preserves the preset's width. This is Edit Mode's own data written
+  bar. With HelloHealer active, that flank block is suppressed and the layout
+  instead uses a 56px bottom offset: HelloBuffCap's default 8px offset plus its
+  40px HUD and an 8px gap. Its height drops by the same 40px, from 250 to 210,
+  so the chat top remains at 266px and does not move back toward the healer
+  grid. This keeps the buff-cap readout out of chat without trading it for the
+  original overlap. The geometry lives in the dedicated healer layout rather
+  than rewriting the profile's base layout. It preserves the preset's width.
+  This is Edit Mode's own data written
   through `C_EditMode.SaveLayouts`, not a `SetPoint` or `SetHeight` made behind
   its back, so the result remains editable and persistent in Edit Mode.
 - **Minimap position.** Stock 1.15.9 already anchors the minimap TOPRIGHT at

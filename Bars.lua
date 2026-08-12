@@ -6,9 +6,9 @@ local Bars = ns.Bars
 local Config = ns.Config
 
 --------------------------------------------------------------------------
--- Optional class-addon integration
+-- Optional sibling-addon integration
 --
--- The class addons remain standalone and never touch Blizzard's bars. They
+-- The sibling addons remain standalone and never touch Blizzard's bars. They
 -- register their top-level cluster here; HelloUI then owns both sides of the
 -- accommodation: suppressing the redundant stock bars and lending an anchor
 -- that follows MainActionBar when Edit Mode moves it.
@@ -23,6 +23,16 @@ local CLASS_BAR_SETS = {
 }
 
 local classClusters = {}
+
+-- HelloHealer only creates its secure header on classes it actually supports.
+-- Checking the frame rather than IsAddOnLoaded therefore leaves an
+-- installed-but-inert copy alone on Warriors, Rogues, and other non-healers.
+-- Its default position occupies the same lower-left strip as bar 5 and chat.
+-- Read the frame but never hook or otherwise modify it: SecureGroupHeaderTemplate
+-- is exactly the kind of taint surface this integration must stay away from.
+local function helloHealerFrame()
+    return _G["HelloHealerMainHeader1"]
+end
 
 local function integrationEnabled()
     return HelloUIDB ~= nil and Config:Enabled()
@@ -39,7 +49,7 @@ local function notifyLayout(entry, integrated)
     end
 end
 
-local function effectiveClassBars()
+local function effectiveSiblingBars()
     local off, active = {}, {}
     if not integrationEnabled() then return off, active end
 
@@ -49,6 +59,12 @@ local function effectiveClassBars()
             for barID in pairs(CLASS_BAR_SETS[addonName]) do off[barID] = true end
         end
     end
+
+    if helloHealerFrame() then
+        active[#active + 1] = "HelloHealer"
+        off.bar5 = true
+    end
+
     table.sort(active)
     return off, active
 end
@@ -363,7 +379,7 @@ end
 function Bars:Apply()
     local off = Config:GetTable("barsOff")
     local enabled = Config:Get("enabled")
-    local classOff = effectiveClassBars()
+    local siblingOff = effectiveSiblingBars()
 
     for _, entry in pairs(classClusters) do
         notifyLayout(entry, enabled)
@@ -374,7 +390,7 @@ function Bars:Apply()
     for _, def in ipairs(BARS) do
         -- With the addon switched off every bar goes back to whatever the
         -- player had, so `/hui off` is a real off rather than a freeze.
-        local wantOff = enabled and (off[def.id] or classOff[def.id]) and true or false
+        local wantOff = enabled and (off[def.id] or siblingOff[def.id]) and true or false
 
         ns:WhenSafe("Bars:" .. def.id, function()
             if def.proxy then
@@ -397,7 +413,7 @@ end
 
 function Bars:Status()
     local off = Config:GetTable("barsOff")
-    local classOff, activeClasses = effectiveClassBars()
+    local siblingOff, activeSiblings = effectiveSiblingBars()
     local list, native, forced = {}, {}, {}
     for _, def in ipairs(BARS) do
         if off[def.id] then
@@ -416,17 +432,17 @@ function Bars:Status()
         endCaps and tostring(endCaps:IsShown()) or "missing",
         tostring(Bars.hookedEndCaps or false))
 
-    if #activeClasses > 0 then
+    if #activeSiblings > 0 then
         local automatic = {}
         for _, def in ipairs(BARS) do
-            if classOff[def.id] then automatic[#automatic + 1] = def.id end
+            if siblingOff[def.id] then automatic[#automatic + 1] = def.id end
         end
-        ns:Print("class integration: %s |cff808080(automatically off: %s)|r",
-            table.concat(activeClasses, ", "), table.concat(automatic, ", "))
+        ns:Print("sibling integration: %s |cff808080(automatically off: %s)|r",
+            table.concat(activeSiblings, ", "), table.concat(automatic, ", "))
     end
 
     if #list == 0 then
-        if #activeClasses > 0 then ns:Print("bars configured off: none")
+        if #activeSiblings > 0 then ns:Print("bars configured off: none")
         else ns:Print("bars: all shown") end
         return
     end

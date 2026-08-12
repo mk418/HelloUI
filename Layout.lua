@@ -67,18 +67,32 @@ local Config = ns.Config
 local BASE_NAME = "HelloUI"
 local MAX_PER_TYPE = 5
 
+-- HelloHealer creates this header only on supported healer classes. A named
+-- frame is a more precise signal than IsAddOnLoaded: an installed-but-inert
+-- copy on another class never creates it.
+local function helloHealerPresent()
+    return _G["HelloHealerMainHeader1"] ~= nil
+end
+
 -- The Edit Mode layout follows the PROFILE, which is what makes "give this
 -- character its own layout" and "give this character its own settings" one
--- decision instead of two that can disagree. Default keeps the bare name, so
--- the layout everybody already has is the layout Default still points at.
+-- decision instead of two that can disagree. Default keeps the bare base name,
+-- so the layout everybody already has is the layout Default still points at;
+-- companion-specific geometry adds a suffix rather than rewriting that base.
 --
 -- The migration names a character's profile after the character, and the old
 -- per-character layout was "HelloUI - <character>" - so the name does not move
 -- underneath anyone either.
 local function layoutName()
     local profile = Config:ProfileName()
-    if not profile or profile == "Default" then return BASE_NAME end
-    return BASE_NAME .. " - " .. profile
+    local name = BASE_NAME
+    if profile and profile ~= "Default" then name = name .. " - " .. profile end
+
+    -- The base layout is shared by every character on the profile. Keep the
+    -- healer geometry in a sibling layout so lowering chat for a Priest does
+    -- not make it collide with the restored left bar on a Warrior.
+    if helloHealerPresent() then name = name .. " - Healer" end
+    return name
 end
 
 -- Always an ACCOUNT layout, even for a named profile: a profile is not a
@@ -155,6 +169,14 @@ local CASTBAR_Y = 245  -- DragonflightUI's own default, above the bars
 local CHAT_X = 16
 local CHAT_Y = BASE_Y + ROW_STEP * 4 + 12  -- 194: clears the stance row
 local CHAT_HEIGHT = 250
+-- HelloBuffCap's HUD defaults to BOTTOMLEFT y=8 with a 40px frame and grows
+-- upward. Keep an 8px gap above it while still leaving chat 138px lower than
+-- the regular layout. The healer chat loses the same 40px added below it, so
+-- its top edge stays at 266 and cannot drift back into the healing frames.
+-- Reserving this strip unconditionally also covers a temporarily hidden HUD
+-- without touching its frame.
+local HEALER_CHAT_Y = 8 + 40 + 8  -- 56
+local HEALER_CHAT_HEIGHT = CHAT_HEIGHT - 40  -- 210
 
 -- Geometry is measured off DragonflightUI's own default screenshot: three
 -- rows of twelve centred and stacked upward, a 4x3 block on each flank, the
@@ -225,12 +247,16 @@ local function geometry()
           point = "BOTTOM", relativeTo = "UIParent", relativePoint = "BOTTOM", x = 0, y = BASE_Y + ROW_STEP * 6 },
     }
 
-    -- The chat frame, lifted clear of the bottom-left flank block.
+    -- The chat frame is normally lifted clear of the bottom-left flank block.
+    -- HelloHealer suppresses that block, allowing chat to sit near the bottom
+    -- above HelloBuffCap and leaving the raised strip free for healing frames.
     local CHATSYS = Enum.EditModeSystem.ChatFrame
     if CHATSYS then
-        g[#g + 1] = { system = CHATSYS, index = nil, chatHeight = CHAT_HEIGHT,
+        local healer = helloHealerPresent()
+        g[#g + 1] = { system = CHATSYS, index = nil,
+            chatHeight = healer and HEALER_CHAT_HEIGHT or CHAT_HEIGHT,
             point = "BOTTOMLEFT", relativeTo = "UIParent", relativePoint = "BOTTOMLEFT",
-            x = CHAT_X, y = CHAT_Y }
+            x = CHAT_X, y = healer and HEALER_CHAT_Y or CHAT_Y }
     end
 
     -- The minimap, a little larger.

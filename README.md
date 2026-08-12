@@ -109,6 +109,14 @@ HelloUI is the only addon in the family that modifies frames it did not create,
 which makes it the only one that can break the others — so where something else
 already covers a thing, that wins.
 
+On a healer where HelloHealer is active, HelloUI automatically suppresses the
+bottom-left action-bar block. Building or resetting the layout there creates a
+separate `HelloUI - Healer` Edit Mode layout with chat at the bottom-left instead
+of raised into the healing frames' space. It reserves the bottom 56px for
+HelloBuffCap's default HUD position and uses a 210px chat height, keeping the
+chat's top edge clear of the healing frames. The regular shared layout remains
+unchanged for non-healer characters.
+
 It does not position frames behind Edit Mode's back. Stock 1.15.9 already
 anchors the minimap flush to the top right, and both `MinimapCluster` and
 `ChatFrame1` are Edit Mode systems that revert direct changes. The HelloUI
