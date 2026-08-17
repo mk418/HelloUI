@@ -366,7 +366,10 @@ end
 ----------------------------------------------------------------------
 
 _G.Enum = _G.Enum or {}
-_G.Enum.EditModeSystem = { ActionBar = 1, UnitFrame = 2, Minimap = 3, StatusTrackingBar = 4, CastBar = 5, ChatFrame = 6 }
+_G.Enum.EditModeSystem = {
+    ActionBar = 1, UnitFrame = 2, Minimap = 3, StatusTrackingBar = 4,
+    CastBar = 5, ChatFrame = 6, VehicleLeaveButton = 7,
+}
 _G.Enum.EditModeMinimapSetting = { HeaderUnderneath = 0, RotateMinimap = 1, Size = 2 }
 _G.Enum.EditModeStatusTrackingBarSystemIndices = { StatusTrackingBar1 = 1, StatusTrackingBar2 = 2 }
 _G.Enum.EditModeStatusTrackingBarSetting = { Size = 0 }
@@ -432,6 +435,9 @@ _G.EditModePresetLayoutManager = {
             table.insert(systems, { system = 3, systemIndex = nil,
                 anchorInfo = { point = "TOPRIGHT", relativeTo = "UIParent", relativePoint = "TOPRIGHT", offsetX = 0, offsetY = 0 },
                 settings = { { setting = 2, value = 5 } }, isInDefaultPosition = true })
+            table.insert(systems, { system = 7, systemIndex = nil,
+                anchorInfo = { point = "BOTTOMLEFT", relativeTo = "UIParent", relativePoint = "BOTTOMLEFT", offsetX = 0, offsetY = 0 },
+                settings = {}, isInDefaultPosition = true })
             return { layoutIndex = idx, layoutName = name, layoutType = 0, systems = systems }
         end
         return { preset("Modern", 1), preset("Classic", 2) }
@@ -1390,6 +1396,26 @@ do
     eq(chatSettings[1], 30, "chat width remainder preserved from the preset")
     eq(chatSettings[2], 2, "chat height hundreds set to 2")
     eq(chatSettings[3], 50, "chat height remainder set to 50 (= 250px total)")
+
+    -- During a taxi flight the vehicle-leave system is labelled "Request
+    -- Stop". It belongs beside chat, not under the raised chat frame.
+    local vehicleLeave
+    for _, e in ipairs(sys) do
+        if e.system == 7 then vehicleLeave = e end
+    end
+    ok(vehicleLeave ~= nil, "vehicle leave button found")
+    eq(vehicleLeave and vehicleLeave.anchorInfo.point, "BOTTOMLEFT",
+        "request-stop button anchored by its left edge")
+    eq(vehicleLeave and vehicleLeave.anchorInfo.relativeTo, "ChatFrame1",
+        "request-stop button follows the chat frame")
+    eq(vehicleLeave and vehicleLeave.anchorInfo.relativePoint, "BOTTOMRIGHT",
+        "request-stop button sits outside chat's right edge")
+    eq(vehicleLeave and vehicleLeave.anchorInfo.offsetX, 8,
+        "request-stop button leaves a gap beside chat")
+    eq(vehicleLeave and vehicleLeave.anchorInfo.offsetY, 0,
+        "request-stop button aligns with chat's bottom edge")
+    eq(vehicleLeave and vehicleLeave.isInDefaultPosition, false,
+        "request-stop system is marked as moved")
 
     -- On healer classes HelloHealer creates a named secure header. A rebuild
     -- uses the bottom-left space vacated by bar 5, keeping the raised strip

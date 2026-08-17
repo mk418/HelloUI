@@ -72,9 +72,10 @@ text permanently readable. See `DESIGN.md` for the evidence and the reasoning.
   with the equally sized stance buttons left-aligned above them — and switches
   to it once, on first login.
   The layout also covers the cast bar, the raised 250px-tall chat frame, the
-  micro menu, the bags and the minimap's size — everything that would otherwise
-  collide with the arrangement. The addon-owned XP/reputation bars sit below
-  that layout. Your own layouts are never touched; switch back in
+  flight-path **Request Stop** button beside it, the micro menu, the bags and
+  the minimap's size — everything that would otherwise collide with the
+  arrangement. The addon-owned XP/reputation bars sit below that layout. Your
+  own layouts are never touched; switch back in
   Edit Mode any time.
 
   Because Edit Mode saves your dragging into the layout itself, **`/hui layout`

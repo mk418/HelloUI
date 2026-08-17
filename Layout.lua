@@ -169,6 +169,7 @@ local CASTBAR_Y = 245  -- DragonflightUI's own default, above the bars
 local CHAT_X = 16
 local CHAT_Y = BASE_Y + ROW_STEP * 4 + 12  -- 194: clears the stance row
 local CHAT_HEIGHT = 250
+local VEHICLE_LEAVE_GAP = 8
 -- HelloBuffCap's HUD defaults to BOTTOMLEFT y=8 with a 40px frame and grows
 -- upward. Keep an 8px gap above it while still leaving chat 138px lower than
 -- the regular layout. The healer chat loses the same 40px added below it, so
@@ -257,6 +258,19 @@ local function geometry()
             chatHeight = healer and HEALER_CHAT_HEIGHT or CHAT_HEIGHT,
             point = "BOTTOMLEFT", relativeTo = "UIParent", relativePoint = "BOTTOMLEFT",
             x = CHAT_X, y = healer and HEALER_CHAT_Y or CHAT_Y }
+    end
+
+    -- On a taxi flight this system becomes Blizzard's "Request Stop" button.
+    -- Its preset anchor remains down in the bottom-left after chat is raised,
+    -- which leaves the button sitting inside the chat window. Keep it in the
+    -- same Edit Mode layout and place it just beyond chat's right edge. Using
+    -- ChatFrame1 as the relative frame also keeps the relationship intact if
+    -- the preset's preserved chat width differs between clients.
+    local LEAVE = Enum.EditModeSystem.VehicleLeaveButton
+    if LEAVE and CHATSYS then
+        g[#g + 1] = { system = LEAVE, index = nil,
+            point = "BOTTOMLEFT", relativeTo = "ChatFrame1", relativePoint = "BOTTOMRIGHT",
+            x = VEHICLE_LEAVE_GAP, y = 0 }
     end
 
     -- The minimap, a little larger.

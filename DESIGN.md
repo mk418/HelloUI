@@ -335,6 +335,12 @@ DragonflightUI's layout was its default.
   This is Edit Mode's own data written
   through `C_EditMode.SaveLayouts`, not a `SetPoint` or `SetHeight` made behind
   its back, so the result remains editable and persistent in Edit Mode.
+- **Vehicle leave / Request Stop position.** Blizzard uses the same Edit Mode
+  system for the vehicle-leave control and the `Request Stop` button shown on a
+  taxi flight. Raising chat while retaining the preset position leaves that
+  button inside `ChatFrame1`. The HelloUI layout anchors its bottom-left to the
+  chat frame's bottom-right with an 8px gap, so it remains beside chat even when
+  the preset's preserved chat width differs.
 - **Minimap position.** Stock 1.15.9 already anchors the minimap TOPRIGHT at
   offset 0,0 — both Edit Mode preset layouts say so and the XML agrees — so
   there is nothing to tuck. DragonflightUI's `+7` was compensating for dead
