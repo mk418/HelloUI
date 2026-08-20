@@ -179,7 +179,7 @@ offLabel:SetText("Bars switched off:")
 local BAR_TOOLTIP = "Hides this bar entirely. The class addons (HelloWarrior, " ..
     "HelloTotems, HelloHealer) are additive by design and never hide Blizzard's " ..
     "bars, so this is how you make room for them. Visible HelloWarrior, HelloMage, " ..
-    "HelloDruid, and HelloRogue clusters automatically make room without changing " ..
+    "HelloWarlock, HelloDruid, and HelloRogue clusters automatically make room without changing " ..
     "these saved choices."
 
 local barChecks = {}

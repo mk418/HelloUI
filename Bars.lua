@@ -18,8 +18,9 @@ local CLASS_BAR_SETS = {
     HelloWarrior = { bar1 = true, bar2 = true, bar3 = true },
     HelloDruid   = { bar1 = true, bar2 = true, bar3 = true },
     HelloRogue   = { bar1 = true, bar2 = true, bar3 = true },
-    -- The Mage utility bank occupies the right-hand block when bottom-aligned.
+    -- Mage and Warlock utility banks occupy the right-hand block when bottom-aligned.
     HelloMage    = { bar1 = true, bar2 = true, bar3 = true, bar4 = true },
+    HelloWarlock = { bar1 = true, bar2 = true, bar3 = true, bar4 = true, pet = true },
 }
 
 local classClusters = {}

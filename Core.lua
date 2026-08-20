@@ -1,6 +1,6 @@
 local ADDON_NAME, ns = ...
 ns.ADDON_NAME = ADDON_NAME
-ns.VERSION = "0.2.9"
+ns.VERSION = "0.2.10"
 
 local PREFIX = "|cff80c0ffHelloUI|r "
 

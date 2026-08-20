@@ -293,12 +293,12 @@ DragonflightUI's layout was its default.
   `Paperdoll.lua`), and CharacterStatsClassic is installed on top.
 - **Stance bars, totem bars, healer grids, ability bars.** HelloWarrior,
   HelloTotems and HelloHealer own these. HelloUI hides Blizzard's; it never
-  draws a replacement. HelloWarrior, HelloMage, HelloDruid and HelloRogue can
-  register their cluster through `HelloUIClassBarAPI`: while that cluster is
-  visible, bars 1-3 are effective additions to `barsOff` without mutating the
-  profile (Mage also adds bar 4), and an untouched cluster follows
-  MainActionBar's bottom anchor. Hiding the cluster or disabling HelloUI hands
-  the configured bars back.
+  draws a replacement. HelloWarrior, HelloMage, HelloWarlock, HelloDruid and
+  HelloRogue can register their cluster through `HelloUIClassBarAPI`: while
+  that cluster is visible, bars 1-3 are effective additions to `barsOff`
+  without mutating the profile. Mage and Warlock also add bar 4, while Warlock
+  adds the pet bar. An untouched cluster follows MainActionBar's bottom anchor.
+  Hiding the cluster or disabling HelloUI hands the configured bars back.
   HelloHealer's `HelloHealerMainHeader1` is the corresponding runtime signal on
   supported healer classes: while it exists, the bottom-left bar 5 is an
   effective addition to `barsOff`. Its presence also selects the low chat

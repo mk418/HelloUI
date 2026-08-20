@@ -1023,6 +1023,16 @@ mageCluster:Hide()
 mageCluster._scripts.OnHide_hook()
 eq(settingValues["PROXY_SHOW_ACTIONBAR_4"], true, "hiding Mage restores bar4")
 
+local warlockCluster = Frame.new("HelloWarlockCluster", _G.UIParent)
+ok(HelloUIClassBarAPI.Register("HelloWarlock", warlockCluster, function() end),
+    "HelloWarlock cluster registered")
+eq(settingValues["PROXY_SHOW_ACTIONBAR_4"], false, "visible Warlock cluster also suppresses bar4")
+eq(_G.PetActionBar._alpha, 0, "visible Warlock cluster suppresses the stock pet bar")
+warlockCluster:Hide()
+warlockCluster._scripts.OnHide_hook()
+eq(settingValues["PROXY_SHOW_ACTIONBAR_4"], true, "hiding Warlock restores bar4")
+eq(_G.PetActionBar._alpha, 1, "hiding Warlock restores the stock pet bar")
+
 warriorCluster:Show()
 warriorCluster._scripts.OnShow_hook()
 ns.Config:Set("enabled", false)
